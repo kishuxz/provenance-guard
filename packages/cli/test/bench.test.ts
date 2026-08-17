@@ -184,7 +184,7 @@ describe("provguard bench", () => {
     const result = await runBench({ monitor: true });
 
     expect(result.monitor).toBe(true);
-    expect(result.scenarios.filter((scenario) => scenario.wouldBlock)).toHaveLength(10);
+    expect(result.scenarios.filter((scenario) => scenario.wouldBlock)).toHaveLength(11);
     expect(result.scenarios.every((scenario) => scenario.actual === "allow")).toBe(true);
   });
 
