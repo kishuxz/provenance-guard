@@ -11,12 +11,14 @@
     "packages/*"
   ],
   "scripts": {
+    "build": "pnpm --filter @provguard/schema build && pnpm --filter @provguard/inbound build && pnpm --filter @provguard/outbound build && pnpm --filter @provguard/harness build && pnpm --filter @provguard/cli build && pnpm --filter @provguard/demo build",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "test": "vitest run",
     "format": "prettier --check ."
   },
   "devDependencies": {
+    "@provguard/cli": "workspace:*",
     "@eslint/js": "^9.33.0",
     "@types/node": "^24.3.0",
     "eslint": "^9.33.0",

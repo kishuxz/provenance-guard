@@ -31,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build
+        run: pnpm build
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -64,13 +67,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build bench runtime
-        run: |
-          pnpm exec tsc -p packages/schema/tsconfig.json
-          pnpm exec tsc -p packages/inbound/tsconfig.json
-          pnpm exec tsc -p packages/outbound/tsconfig.json
-          pnpm exec tsc -p packages/harness/tsconfig.json
-          pnpm exec tsc -p packages/cli/tsconfig.json
+      - name: Build
+        run: pnpm build
 
       - name: Bench
-        run: node packages/cli/dist/cli/src/index.js bench
+        run: pnpm exec provguard bench

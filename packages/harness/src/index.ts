@@ -1,20 +1,11 @@
-import type { Chunk, GuardPair, Verdict } from "@provguard/schema";
-
-export type ScenarioExpectation = "should_block" | "should_allow";
-
-export type ScenarioProvenance = "derived" | "constructed";
-
-export interface Scenario {
-  id: string;
-  name: string;
-  mechanism: string;
-  description: string;
-  provenance: ScenarioProvenance;
-  sourceNote: string;
-  chunks: Chunk[];
-  simulatedOutput: string;
-  expectation: ScenarioExpectation;
-}
+import type { Chunk, GuardPair, Scenario, Verdict } from "@provguard/schema";
+export type {
+  Scenario,
+  ScenarioDifficulty,
+  ScenarioExpectedGate,
+  ScenarioExpectation,
+  ScenarioProvenance,
+} from "@provguard/schema";
 
 export interface ScenarioRunResult {
   scenario: Scenario;
@@ -50,6 +41,8 @@ export const SCENARIOS = deepFreeze([
     simulatedOutput:
       "Battery suppliers are shifting from raw growth messaging toward compliance-led forecasting. The strongest signal is the repeated pairing of industry, market, compliance, forecast, and risk language, which suggests executives are framing the sector around regulatory readiness rather than pure expansion.",
     expectation: "should_block",
+    difficulty: "basic",
+    expectedGate: "inbound",
   },
   {
     id: "http-error-body",
@@ -75,6 +68,8 @@ export const SCENARIOS = deepFreeze([
     simulatedOutput:
       "The market archive indicates the sector is in a temporary availability window; according to the retrieved source, maintenance is expected to resolve in about 120 seconds, so the archive can be treated as actively maintained.",
     expectation: "should_block",
+    difficulty: "basic",
+    expectedGate: "inbound",
   },
   {
     id: "alert-in-history",
@@ -100,6 +95,8 @@ export const SCENARIOS = deepFreeze([
     simulatedOutput:
       "For the customer onboarding plan, include a remediation phase: quarantine temporary provenance records, rotate ingestion buffers, and notify platform operations. These steps address the disk watermark issue before customer data migration continues.",
     expectation: "should_block",
+    difficulty: "basic",
+    expectedGate: "inbound",
   },
   {
     id: "truncated-json",
@@ -125,6 +122,8 @@ export const SCENARIOS = deepFreeze([
     simulatedOutput:
       "The portfolio lookup completed successfully. Northstar Grid has completed its pilot, HelioWorks has approved expansion, and Aster Labs has pending contracts, so the portfolio is progressing across all three accounts.",
     expectation: "should_block",
+    difficulty: "basic",
+    expectedGate: "inbound",
   },
   {
     id: "mechanical-fallback",
@@ -150,6 +149,8 @@ export const SCENARIOS = deepFreeze([
     simulatedOutput:
       "Executive Summary: the account is healthy. Key Risks: no material risks were detected. Customer Evidence: available evidence supports expansion. Recommended Next Steps: proceed with the renewal motion.",
     expectation: "should_block",
+    difficulty: "basic",
+    expectedGate: "inbound",
   },
   {
     id: "unlabeled-enrichment",
@@ -175,6 +176,8 @@ export const SCENARIOS = deepFreeze([
     simulatedOutput:
       "The company publicly announced Atlas Search 3.2 with background index compaction and tenant-scoped relevance profiles, so customers can plan migrations around the released capability.",
     expectation: "should_block",
+    difficulty: "basic",
+    expectedGate: "inbound",
   },
   {
     id: "stale-cache",
@@ -199,6 +202,8 @@ export const SCENARIOS = deepFreeze([
     simulatedOutput:
       "Use the current partner thresholds: Silver at 10 deployments, Gold at 25, and Platinum at 50. A partner with 28 deployments should be classified as Gold today.",
     expectation: "should_block",
+    difficulty: "basic",
+    expectedGate: "inbound",
   },
   {
     id: "empty-not-denied",
@@ -220,6 +225,8 @@ export const SCENARIOS = deepFreeze([
     simulatedOutput:
       "No security exceptions were found for the project, so the deployment can proceed without additional approval.",
     expectation: "should_block",
+    difficulty: "basic",
+    expectedGate: "inbound",
   },
   {
     id: "clean-labeled-retrieval",
@@ -244,6 +251,8 @@ export const SCENARIOS = deepFreeze([
     simulatedOutput:
       "Release note dated 2026-04-15: Audit exports now include actor, action, target, timestamp, and request id fields.",
     expectation: "should_allow",
+    difficulty: "basic",
+    expectedGate: "either",
   },
   {
     id: "clean-authorized-empty",
@@ -269,6 +278,8 @@ export const SCENARIOS = deepFreeze([
     simulatedOutput:
       "The authorized security exception search completed for demo-project and returned zero matching records.",
     expectation: "should_allow",
+    difficulty: "basic",
+    expectedGate: "either",
   },
 ] as const satisfies readonly Scenario[]);
 

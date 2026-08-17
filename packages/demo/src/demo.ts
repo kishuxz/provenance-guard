@@ -1,15 +1,10 @@
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
-import type { Chunk, ContextSlot, Verdict } from "../../schema/src/index.js";
-import {
-  DEFAULT_POLICY,
-  assembleContext,
-  checkSlot,
-  classifyChunk,
-} from "../../inbound/src/index.js";
-import { auditOutput } from "../../outbound/src/index.js";
-import type { ClaimAssessment } from "../../outbound/src/index.js";
+import { DEFAULT_POLICY, assembleContext, checkSlot, classifyChunk } from "@provguard/inbound";
+import { auditOutput } from "@provguard/outbound";
+import type { ClaimAssessment } from "@provguard/outbound";
+import type { Chunk, ContextSlot, Verdict } from "@provguard/schema";
 import {
   CAPTURE_COMMAND,
   FABRICATED_ANALYSIS,

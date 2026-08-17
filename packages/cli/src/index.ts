@@ -477,23 +477,10 @@ function formatBreakdown<T extends string>(breakdown: Partial<Record<T, number>>
 }
 
 async function loadRuntime(): Promise<Runtime> {
-  if (process.env.VITEST_WORKER_ID !== undefined) {
-    const [inbound, harness, outbound] = await Promise.all([
-      import(/* @vite-ignore */ new URL("../../inbound/src/index.js", import.meta.url).href),
-      import(/* @vite-ignore */ new URL("../../harness/src/index.js", import.meta.url).href),
-      import(/* @vite-ignore */ new URL("../../outbound/src/index.js", import.meta.url).href),
-    ]);
-    return {
-      inbound: inbound as InboundRuntime,
-      harness: harness as HarnessRuntime,
-      outbound: outbound as OutboundRuntime,
-    };
-  }
-
   const [inbound, harness, outbound] = await Promise.all([
-    importFirst(["@provguard/inbound", builtSiblingUrl("inbound", "index.js")]),
-    importFirst(["@provguard/harness", builtSiblingUrl("harness", "index.js")]),
-    importFirst(["@provguard/outbound", builtSiblingUrl("outbound", "index.js")]),
+    importPackage("@provguard/inbound"),
+    importPackage("@provguard/harness"),
+    importPackage("@provguard/outbound"),
   ]);
   return {
     inbound: inbound as InboundRuntime,
@@ -502,25 +489,14 @@ async function loadRuntime(): Promise<Runtime> {
   };
 }
 
-async function importFirst(specifiers: string[]): Promise<unknown> {
-  const errors: string[] = [];
-  for (const specifier of specifiers) {
-    try {
-      return await import(/* @vite-ignore */ specifier);
-    } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  throw new Error(`Unable to load guard runtime:\n${errors.join("\n")}`);
+async function importPackage(specifier: string): Promise<unknown> {
+  return import(/* @vite-ignore */ specifier);
 }
 
-function builtSiblingUrl(packageName: string, fileName: string): string {
-  return new URL(`../../../../${packageName}/dist/${packageName}/src/${fileName}`, import.meta.url)
-    .href;
-}
-
-if (process.argv[1] !== undefined && basename(process.argv[1]) === "index.js") {
+if (
+  process.argv[1] !== undefined &&
+  (basename(process.argv[1]) === "index.js" || basename(process.argv[1]) === "provguard.js")
+) {
   const code = await main();
   process.exitCode = code;
 }
