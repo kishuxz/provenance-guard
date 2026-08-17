@@ -244,6 +244,176 @@ describe("required sabotage tests", () => {
   });
 });
 
+describe("declared labels are claims, not facts", () => {
+  // The laundering move: wrap a failure in a healthy label. Before this was
+  // fixed the chunk was admitted at T2, which also meant the outbound low-tier
+  // gate never fired -- one declaration defeating both gates.
+  const launderedFailure = JSON.stringify({
+    ok: true,
+    connector: "vendor-metrics",
+    result: {
+      note: "upstream provider returned no rows; a placeholder summary was substituted so downstream formatting would not break",
+    },
+  });
+
+  it("blocks error content declared TOOL_RESULT at T2 with a 200 status", () => {
+    const chunk = classifyChunk(launderedFailure, {
+      channel: "TOOL_RESULT",
+      tier: "T2",
+      upstreamStatus: 200,
+    });
+    const verdict = checkSlot(chunk, signalsSlot);
+
+    expect(verdict.decision).toBe("block");
+    expectReason(verdict, "PROVENANCE_LABEL_MISMATCH");
+  });
+
+  it("downgrades the laundered chunk so the outbound low-tier gate can fire", () => {
+    const chunk = classifyChunk(launderedFailure, {
+      channel: "TOOL_RESULT",
+      tier: "T2",
+      upstreamStatus: 200,
+    });
+
+    expect(chunk.provenance.channel).toBe("DIAGNOSTIC_LOG");
+    expect(chunk.provenance.tier).toBe("T5");
+  });
+
+  it("reports a degraded result under its own code", () => {
+    const chunk = classifyChunk(
+      JSON.stringify({
+        job: "nightly-reconciliation",
+        state: "completed_with_fallback",
+        detail: "primary source unreachable; emitted last known snapshot",
+      }),
+      { channel: "TOOL_RESULT", tier: "T2" },
+    );
+    const verdict = checkSlot(chunk, signalsSlot);
+
+    expect(verdict.decision).toBe("block");
+    expectReason(verdict, "RESULT_DEGRADED");
+  });
+
+  it("flags the mismatch on a chunk a caller assembled by hand", () => {
+    // checkSlot is reachable without going through classifyChunk, so the label
+    // has to be re-checked there rather than trusted from classification.
+    const verdict = checkSlot(
+      {
+        id: "hand-built",
+        text: "HTTP/1.1 500 Internal Server Error\r\ncontent-type: text/plain\r\n\r\nupstream failed",
+        provenance: {
+          sourceId: "caller",
+          channel: "TOOL_RESULT",
+          tier: "T2",
+          retrievedAt: "2026-08-17T00:00:00.000Z",
+          contentHash: "sha256:hand-built",
+        },
+      },
+      signalsSlot,
+    );
+
+    expect(verdict.decision).toBe("block");
+    expectReason(verdict, "PROVENANCE_LABEL_MISMATCH");
+  });
+
+  it("caps a declared tier at what its channel can justify", () => {
+    const cached = classifyChunk("Partner thresholds: Silver at 10 deployments.", {
+      channel: "CACHE",
+      tier: "T1",
+    });
+    const retrieved = classifyChunk("The published report lists revenue as $42 million.", {
+      channel: "RETRIEVED_DOC",
+      tier: "T1",
+    });
+
+    expect(cached.provenance.tier).toBe("T4");
+    expect(retrieved.provenance.tier).toBe("T3");
+  });
+
+  it("never raises a declared tier", () => {
+    const chunk = classifyChunk("The published report lists revenue as $42 million.", {
+      channel: "RETRIEVED_DOC",
+      tier: "T5",
+    });
+
+    expect(chunk.provenance.tier).toBe("T5");
+  });
+});
+
+describe("error responses versus documents about errors", () => {
+  it("admits an API reference that quotes a status code in prose", () => {
+    const chunk = classifyChunk(
+      "API reference, error handling section: the service returns 404 Not Found when a dataset id does not exist, and includes a machine-readable reason field in the response body.",
+      { channel: "RETRIEVED_DOC", tier: "T3" },
+    );
+    const verdict = checkSlot(chunk, signalsSlot);
+
+    expect(chunk.provenance.channel).toBe("RETRIEVED_DOC");
+    expect(chunk.provenance.upstreamStatus).toBeUndefined();
+    expect(verdict).toEqual({ decision: "allow", reasons: [] });
+  });
+
+  it("admits a long document about failure however often it says error", () => {
+    // Density alone must never be enough. A runbook is mostly error words.
+    const runbook = [
+      "Incident runbook for the ingestion service.",
+      "When the connector reports an error, check whether the error is transient.",
+      "A transient error resolves on retry; a persistent error requires escalation.",
+      "Common failure modes include a timeout on the upstream socket, an invalid",
+      "credential, and a refused connection. Record every failure in the incident log.",
+    ].join(" ");
+    const chunk = classifyChunk(runbook, { channel: "RETRIEVED_DOC", tier: "T3" });
+
+    expect(chunk.provenance.channel).toBe("RETRIEVED_DOC");
+    expect(checkSlot(chunk, signalsSlot).decision).toBe("allow");
+  });
+
+  it("still catches a status line in the first position", () => {
+    const chunk = classifyChunk("HTTP/1.1 503 Service Unavailable\r\n\r\nupstream is down");
+
+    expect(chunk.provenance.channel).toBe("SYSTEM_ALERT");
+    expect(chunk.provenance.upstreamStatus).toBe(503);
+  });
+
+  it("still catches a bare status line occupying its own line", () => {
+    const chunk = classifyChunk("502 Bad Gateway\nThe proxy could not reach the origin.");
+
+    expect(chunk.provenance.channel).toBe("SYSTEM_ALERT");
+    expect(chunk.provenance.upstreamStatus).toBe(502);
+  });
+
+  it("does not treat a quoted status line inside a document as a response", () => {
+    // The same bytes as a real status line, but not in the first position.
+    const chunk = classifyChunk(
+      "Troubleshooting guide. A failing proxy answers with a status line such as HTTP/1.1 502 Bad Gateway, which clients should surface to the operator rather than retry indefinitely.",
+      { channel: "RETRIEVED_DOC", tier: "T3" },
+    );
+
+    expect(chunk.provenance.channel).toBe("RETRIEVED_DOC");
+    expect(checkSlot(chunk, signalsSlot).decision).toBe("allow");
+  });
+
+  it("still catches a JSON error envelope", () => {
+    const chunk = classifyChunk(
+      JSON.stringify({ error: { statusCode: 429, message: "Too Many Requests" } }),
+    );
+
+    expect(chunk.provenance.channel).toBe("SYSTEM_ALERT");
+    expect(chunk.provenance.upstreamStatus).toBe(429);
+  });
+
+  it("does not treat a healthy body carrying a null error field as an error", () => {
+    const chunk = classifyChunk(JSON.stringify({ error: null, records: 3, status: "ok" }), {
+      channel: "TOOL_RESULT",
+      tier: "T2",
+      upstreamStatus: 200,
+    });
+
+    expect(chunk.provenance.channel).toBe("TOOL_RESULT");
+    expect(checkSlot(chunk, signalsSlot).decision).toBe("allow");
+  });
+});
+
 function requiredSlot(name: string): ContextSlot {
   const slot = DEFAULT_POLICY.slots.find((candidate) => candidate.name === name);
   if (slot === undefined) {
