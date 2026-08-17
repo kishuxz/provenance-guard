@@ -1,0 +1,16 @@
+{
+  "name": "@provguard/demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "demo": "tsc -p tsconfig.json && node dist/demo/src/demo.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@provguard/harness": "workspace:*",
+    "@provguard/inbound": "workspace:*",
+    "@provguard/outbound": "workspace:*",
+    "@provguard/schema": "workspace:*"
+  }
+}
