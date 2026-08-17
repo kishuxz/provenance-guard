@@ -104,7 +104,12 @@ describe("a correctly grounded paragraph", () => {
   ].join(" ");
 
   const context = [
-    chunk({ id: "doc-1", tier: "T1", channel: "RETRIEVED_DOC", text: `Incident 4417 postmortem. ${paragraph}` }),
+    chunk({
+      id: "doc-1",
+      tier: "T1",
+      channel: "RETRIEVED_DOC",
+      text: `Incident 4417 postmortem. ${paragraph}`,
+    }),
   ];
 
   it('passes with method "exact"', () => {
@@ -146,7 +151,10 @@ describe("verdict rollup", () => {
 
   it("quarantines when a claim is merely unverifiable", () => {
     const context = [
-      chunk({ id: "c1", text: "The checkout service handles payment authorization and refund requests." }),
+      chunk({
+        id: "c1",
+        text: "The checkout service handles payment authorization and refund requests.",
+      }),
     ];
     const result = auditOutput("the checkout service handles refund requests carefully", context);
 
@@ -178,18 +186,23 @@ describe("verdict rollup", () => {
 
 describe("the injected judge", () => {
   const context = [
-    chunk({ id: "c1", text: "The checkout service handles payment authorization and refund requests." }),
+    chunk({
+      id: "c1",
+      text: "The checkout service handles payment authorization and refund requests.",
+    }),
   ];
   const undecidable = "the checkout service handles refund requests carefully";
 
-  const judgeReturning = (status: Grounding["status"]) => async (claim: Claim): Promise<Grounding> =>
-    Promise.resolve({
-      claimId: claim.id,
-      status,
-      supportingChunkIds: status === "grounded" ? ["c1"] : [],
-      method: "judge",
-      score: status === "grounded" ? 0.9 : 0,
-    });
+  const judgeReturning =
+    (status: Grounding["status"]) =>
+    async (claim: Claim): Promise<Grounding> =>
+      Promise.resolve({
+        claimId: claim.id,
+        status,
+        supportingChunkIds: status === "grounded" ? ["c1"] : [],
+        method: "judge",
+        score: status === "grounded" ? 0.9 : 0,
+      });
 
   it("is never consulted where a deterministic result exists", async () => {
     const seen: string[] = [];
@@ -198,9 +211,11 @@ describe("the injected judge", () => {
       return judgeReturning("ungrounded")(claim);
     };
 
-    await auditOutputWithJudge("The nightly job compacted 12 segments.", [
-      chunk({ id: "g1", tier: "T1", text: "The nightly job compacted 12 segments." }),
-    ], { judge });
+    await auditOutputWithJudge(
+      "The nightly job compacted 12 segments.",
+      [chunk({ id: "g1", tier: "T1", text: "The nightly job compacted 12 segments." })],
+      { judge },
+    );
 
     expect(seen).toEqual([]);
   });

@@ -41,7 +41,7 @@ export const HTTP_400_PAGE = chunk({
     "Content-Type: text/html; charset=iso-8859-1",
     "Connection: close",
     "",
-    "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">",
+    '<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">',
     "<html><head>",
     "<title>400 Bad Request</title>",
     "</head><body>",

@@ -11,8 +11,13 @@ function claimOf(text: string): Claim {
 
 describe("groundClaim: the deterministic ladder", () => {
   it('grounds a verbatim claim with method "exact"', () => {
-    const chunks = [chunk({ id: "c1", text: "The checkout service returned 503 for 4% of requests." })];
-    const grounding = groundClaim(claimOf("The checkout service returned 503 for 4% of requests."), chunks);
+    const chunks = [
+      chunk({ id: "c1", text: "The checkout service returned 503 for 4% of requests." }),
+    ];
+    const grounding = groundClaim(
+      claimOf("The checkout service returned 503 for 4% of requests."),
+      chunks,
+    );
 
     expect(grounding).toMatchObject({
       claimId: "claim-0",
@@ -24,8 +29,13 @@ describe("groundClaim: the deterministic ladder", () => {
   });
 
   it("falls back to a normalized match when only case, spacing and punctuation differ", () => {
-    const chunks = [chunk({ id: "c1", text: "the  CHECKOUT service returned 503 -- for 4% of requests" })];
-    const assessment = assessClaim(claimOf("The checkout service returned 503 for 4% of requests."), chunks);
+    const chunks = [
+      chunk({ id: "c1", text: "the  CHECKOUT service returned 503 -- for 4% of requests" }),
+    ];
+    const assessment = assessClaim(
+      claimOf("The checkout service returned 503 for 4% of requests."),
+      chunks,
+    );
 
     expect(assessment.grounding.status).toBe("grounded");
     expect(assessment.grounding.method).toBe("fuzzy");
@@ -34,10 +44,16 @@ describe("groundClaim: the deterministic ladder", () => {
 
   it("falls back to entity overlap when the claim is reworded but every specific is present", () => {
     const chunks = [
-      chunk({ id: "c1", text: "Incident report: Checkout began emitting 503 responses at 14:02 UTC." }),
+      chunk({
+        id: "c1",
+        text: "Incident report: Checkout began emitting 503 responses at 14:02 UTC.",
+      }),
       chunk({ id: "c2", text: "Checkout error budget for the quarter is 4%." }),
     ];
-    const assessment = assessClaim(claimOf("Checkout emitted 503 errors, consuming 4% of the budget."), chunks);
+    const assessment = assessClaim(
+      claimOf("Checkout emitted 503 errors, consuming 4% of the budget."),
+      chunks,
+    );
 
     expect(assessment.grounding.status).toBe("grounded");
     expect(assessment.grounding.method).toBe("fuzzy");
@@ -66,8 +82,13 @@ describe("groundClaim: the deterministic ladder", () => {
 
 describe("groundClaim: rejection", () => {
   it("rejects a claim whose specifics are absent from context", () => {
-    const chunks = [chunk({ id: "c1", text: "The checkout service returned 503 for 4% of requests." })];
-    const assessment = assessClaim(claimOf("Kubernetes evicted the Redis pod in cluster prod-7."), chunks);
+    const chunks = [
+      chunk({ id: "c1", text: "The checkout service returned 503 for 4% of requests." }),
+    ];
+    const assessment = assessClaim(
+      claimOf("Kubernetes evicted the Redis pod in cluster prod-7."),
+      chunks,
+    );
 
     expect(assessment.grounding.status).toBe("ungrounded");
     expect(assessment.grounding.score).toBe(0);
@@ -75,8 +96,13 @@ describe("groundClaim: rejection", () => {
   });
 
   it("rejects a claim that is half-sourced and half-invented", () => {
-    const chunks = [chunk({ id: "c1", text: "The checkout service returned 503 for some requests." })];
-    const assessment = assessClaim(claimOf("The checkout service returned 503 and paged Rivera at 3am."), chunks);
+    const chunks = [
+      chunk({ id: "c1", text: "The checkout service returned 503 for some requests." }),
+    ];
+    const assessment = assessClaim(
+      claimOf("The checkout service returned 503 and paged Rivera at 3am."),
+      chunks,
+    );
 
     expect(assessment.grounding.status).toBe("ungrounded");
     expect(assessment.reason?.code).toBe("CLAIM_UNGROUNDED");
@@ -84,8 +110,13 @@ describe("groundClaim: rejection", () => {
   });
 
   it("rejects an unsupported number even when the surrounding prose is sourced", () => {
-    const chunks = [chunk({ id: "c1", text: "The checkout service returned 503 for some requests." })];
-    const assessment = assessClaim(claimOf("The checkout service returned 503 for 87% of requests."), chunks);
+    const chunks = [
+      chunk({ id: "c1", text: "The checkout service returned 503 for some requests." }),
+    ];
+    const assessment = assessClaim(
+      claimOf("The checkout service returned 503 for 87% of requests."),
+      chunks,
+    );
 
     expect(assessment.grounding.status).toBe("ungrounded");
     expect(assessment.detail).toMatch(/87/);
@@ -98,9 +129,15 @@ describe("groundClaim: rejection", () => {
 
   it("defers a claim with no specifics that still shares context vocabulary", () => {
     const chunks = [
-      chunk({ id: "c1", text: "The checkout service handles payment authorization and refund requests." }),
+      chunk({
+        id: "c1",
+        text: "The checkout service handles payment authorization and refund requests.",
+      }),
     ];
-    const assessment = assessClaim(claimOf("the checkout service handles refund requests carefully"), chunks);
+    const assessment = assessClaim(
+      claimOf("the checkout service handles refund requests carefully"),
+      chunks,
+    );
 
     expect(assessment.grounding.status).toBe("unverifiable");
     expect(assessment.decidedBy).toBe("none");
@@ -117,10 +154,14 @@ describe("groundClaim: the T4/T5 tier gate", () => {
   });
 
   it("refuses to ground an exact match when every supporting chunk is untrusted", () => {
-    const assessment = assessClaim(
-      claimOf("upstream connect error or disconnect was logged."),
-      [chunk({ id: "u1", tier: "T5", channel: "UNLABELED", text: "log: upstream connect error or disconnect was logged. retrying now." })],
-    );
+    const assessment = assessClaim(claimOf("upstream connect error or disconnect was logged."), [
+      chunk({
+        id: "u1",
+        tier: "T5",
+        channel: "UNLABELED",
+        text: "log: upstream connect error or disconnect was logged. retrying now.",
+      }),
+    ]);
 
     expect(assessment.grounding.status).toBe("ungrounded");
     expect(assessment.grounding.method).toBe("exact");
@@ -132,7 +173,9 @@ describe("groundClaim: the T4/T5 tier gate", () => {
   it("uses a reason code distinct from an ordinary miss", () => {
     const claim = claimOf("The gateway reported a 502 error.");
     const untrusted = assessClaim(claim, [errorChunk]);
-    const missing = assessClaim(claim, [chunk({ id: "c1", text: "Unrelated notes about the billing exporter." })]);
+    const missing = assessClaim(claim, [
+      chunk({ id: "c1", text: "Unrelated notes about the billing exporter." }),
+    ]);
 
     expect(untrusted.grounding.status).toBe("ungrounded");
     expect(missing.grounding.status).toBe("ungrounded");
@@ -157,8 +200,17 @@ describe("groundClaim: the T4/T5 tier gate", () => {
     // The untrusted chunk matches verbatim; the trusted chunk only covers the
     // specifics. Trusted support wins and the claim grounds.
     const assessment = assessClaim(claimOf("Postgres replica lag reached 12 seconds."), [
-      chunk({ id: "t5", tier: "T5", channel: "UNLABELED", text: "Postgres replica lag reached 12 seconds." }),
-      chunk({ id: "t1", tier: "T1", text: "Monitoring for Postgres shows replica lag peaking near 12 seconds today." }),
+      chunk({
+        id: "t5",
+        tier: "T5",
+        channel: "UNLABELED",
+        text: "Postgres replica lag reached 12 seconds.",
+      }),
+      chunk({
+        id: "t1",
+        tier: "T1",
+        text: "Monitoring for Postgres shows replica lag peaking near 12 seconds today.",
+      }),
     ]);
 
     expect(assessment.grounding.status).toBe("grounded");

@@ -32,13 +32,7 @@ export {
   type JudgeAdvisory,
   type JudgeHook,
 } from "./types.js";
-export {
-  contentTokens,
-  extractEntities,
-  extractNumbers,
-  normalize,
-  tokenize,
-} from "./text.js";
+export { contentTokens, extractEntities, extractNumbers, normalize, tokenize } from "./text.js";
 
 /** This package's implementation of the shared `OutboundGuard` contract. */
 export const outboundGuard: OutboundGuard = {
