@@ -1,0 +1,22 @@
+{
+  "name": "@provguard/harness",
+  "version": "0.1.0",
+  "description": "Deterministic offline pollution-chain reproductions for provenance guard testing.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@provguard/schema": "*"
+  }
+}
