@@ -7,6 +7,9 @@ settings:
 importers:
   .:
     devDependencies:
+      "@provguard/cli":
+        specifier: workspace:*
+        version: link:packages/cli
       "@eslint/js":
         specifier: ^9.33.0
         version: 9.39.5
@@ -59,9 +62,17 @@ importers:
         specifier: workspace:*
         version: link:../schema
 
-  packages/harness: {}
+  packages/harness:
+    dependencies:
+      "@provguard/schema":
+        specifier: workspace:*
+        version: link:../schema
 
-  packages/inbound: {}
+  packages/inbound:
+    dependencies:
+      "@provguard/schema":
+        specifier: workspace:*
+        version: link:../schema
 
   packages/outbound:
     dependencies:

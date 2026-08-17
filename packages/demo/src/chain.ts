@@ -1,17 +1,5 @@
-import { getScenario } from "../../harness/src/index.js";
-import type { Scenario } from "../../harness/src/index.js";
-
-/**
- * Sibling packages are imported by relative source path rather than by
- * package name on purpose.
- *
- * Every package here publishes `./dist/index.js`, and nothing in CI builds
- * those dists -- typecheck runs with `--noEmit`. Importing by name would
- * therefore resolve to a file that does not exist. Relative source imports
- * work identically under `tsc` (which emits the siblings alongside this
- * package) and under Vitest (which loads the TypeScript directly), so the
- * walkthrough runs the real guard code in both.
- */
+import { getScenario } from "@provguard/harness";
+import type { Scenario } from "@provguard/harness";
 
 /** The harness entry this walkthrough dramatizes. */
 export const SCENARIO_ID = "stdout-capture";

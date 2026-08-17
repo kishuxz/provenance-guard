@@ -3,8 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "./dist/demo.js",
+  "types": "./dist/demo.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/demo.d.ts",
+      "default": "./dist/demo.js"
+    }
+  },
   "scripts": {
-    "demo": "tsc -p tsconfig.json && node dist/demo/src/demo.js",
+    "build": "tsc -p tsconfig.build.json",
+    "demo": "pnpm build && node dist/demo.js",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
