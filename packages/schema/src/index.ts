@@ -110,6 +110,33 @@ export const GroundingSchema = z.object({
 });
 export type Grounding = z.infer<typeof GroundingSchema>;
 
+export const ScenarioExpectationSchema = z.enum(["should_block", "should_allow"]);
+export type ScenarioExpectation = z.infer<typeof ScenarioExpectationSchema>;
+
+export const ScenarioProvenanceSchema = z.enum(["derived", "constructed"]);
+export type ScenarioProvenance = z.infer<typeof ScenarioProvenanceSchema>;
+
+export const ScenarioDifficultySchema = z.enum(["basic", "hard"]);
+export type ScenarioDifficulty = z.infer<typeof ScenarioDifficultySchema>;
+
+export const ScenarioExpectedGateSchema = z.enum(["inbound", "outbound", "either"]);
+export type ScenarioExpectedGate = z.infer<typeof ScenarioExpectedGateSchema>;
+
+export const ScenarioSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  mechanism: z.string().min(1),
+  description: z.string().min(1),
+  provenance: ScenarioProvenanceSchema,
+  sourceNote: z.string().min(1),
+  chunks: z.array(ChunkSchema),
+  simulatedOutput: z.string(),
+  expectation: ScenarioExpectationSchema,
+  difficulty: ScenarioDifficultySchema,
+  expectedGate: ScenarioExpectedGateSchema,
+});
+export type Scenario = z.infer<typeof ScenarioSchema>;
+
 export interface InboundGuard {
   classifyChunk(raw: string, hints?: Partial<Provenance>): Chunk;
   checkSlot(chunk: Chunk, slot: ContextSlot): Verdict;

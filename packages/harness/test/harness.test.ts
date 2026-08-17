@@ -91,6 +91,14 @@ describe("SCENARIOS", () => {
     for (const scenario of SCENARIOS) {
       expect(["derived", "constructed"]).toContain(scenario.provenance);
       expect(scenario.sourceNote).toContain(scenario.provenance);
+      expect(scenario.difficulty).toBe("basic");
+      expect(["inbound", "either"]).toContain(scenario.expectedGate);
+    }
+  });
+
+  it("expects every block scenario to be caught by the inbound gate", () => {
+    for (const scenario of SCENARIOS.filter((item) => item.expectation === "should_block")) {
+      expect(scenario.expectedGate).toBe("inbound");
     }
   });
 

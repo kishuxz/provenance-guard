@@ -11,6 +11,11 @@ import {
   ReasonCodeSchema,
   ReasonCodes,
   ReasonSchema,
+  ScenarioDifficultySchema,
+  ScenarioExpectedGateSchema,
+  ScenarioExpectationSchema,
+  ScenarioProvenanceSchema,
+  ScenarioSchema,
   SlotPolicySchema,
   VerdictSchema,
 } from "../src/index.js";
@@ -272,6 +277,63 @@ describe("GroundingSchema", () => {
 
     expect(result.success).toBe(false);
     expectIssue(result, "too_big", ["score"]);
+  });
+});
+
+describe("Scenario metadata schemas", () => {
+  it("parses scenario metadata values", () => {
+    expect(ScenarioDifficultySchema.parse("basic")).toBe("basic");
+    expect(ScenarioDifficultySchema.parse("hard")).toBe("hard");
+    expect(ScenarioExpectedGateSchema.parse("inbound")).toBe("inbound");
+    expect(ScenarioExpectedGateSchema.parse("outbound")).toBe("outbound");
+    expect(ScenarioExpectedGateSchema.parse("either")).toBe("either");
+    expect(ScenarioExpectationSchema.parse("should_block")).toBe("should_block");
+    expect(ScenarioProvenanceSchema.parse("derived")).toBe("derived");
+  });
+
+  it("rejects unknown scenario metadata values", () => {
+    const result = ScenarioExpectedGateSchema.safeParse("preflight");
+
+    expect(result.success).toBe(false);
+    expectIssue(result, "invalid_value");
+  });
+});
+
+describe("ScenarioSchema", () => {
+  const validScenario = {
+    id: "scenario-1",
+    name: "Scenario One",
+    mechanism: "A diagnostic payload reaches a data slot.",
+    description: "A concise scenario description.",
+    provenance: "derived",
+    sourceNote: "derived — incident note",
+    chunks: [validChunk],
+    simulatedOutput: "The output repeats the unsupported diagnostic.",
+    expectation: "should_block",
+    difficulty: "basic",
+    expectedGate: "inbound",
+  } as const;
+
+  it("parses valid scenarios", () => {
+    expect(ScenarioSchema.parse(validScenario)).toEqual(validScenario);
+  });
+
+  it("requires difficulty", () => {
+    const withoutDifficulty: Record<string, unknown> = { ...validScenario };
+    delete withoutDifficulty.difficulty;
+    const result = ScenarioSchema.safeParse(withoutDifficulty);
+
+    expect(result.success).toBe(false);
+    expectIssue(result, "invalid_value", ["difficulty"]);
+  });
+
+  it("requires expectedGate", () => {
+    const withoutExpectedGate: Record<string, unknown> = { ...validScenario };
+    delete withoutExpectedGate.expectedGate;
+    const result = ScenarioSchema.safeParse(withoutExpectedGate);
+
+    expect(result.success).toBe(false);
+    expectIssue(result, "invalid_value", ["expectedGate"]);
   });
 });
 
