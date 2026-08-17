@@ -22,6 +22,7 @@ export {
   type AuditOptions,
   type AuditResult,
   type AuditWithJudgeOptions,
+  type UnverifiablePolicy,
 } from "./audit.js";
 export {
   UNTRUSTED_TIERS,

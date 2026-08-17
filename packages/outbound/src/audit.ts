@@ -3,7 +3,16 @@ import type { ClaimAssessment, JudgeAdvisory, JudgeHook } from "./types.js";
 import { extractClaims } from "./extract.js";
 import { assessClaim, type GroundOptions } from "./ground.js";
 
-export type AuditOptions = GroundOptions;
+export type UnverifiablePolicy = "block" | "quarantine";
+
+export interface AuditOptions extends GroundOptions {
+  /**
+   * Default is strict: unverifiable claims are non-shippable. Set to
+   * `quarantine` only when the caller has a separate quarantine path and wants
+   * the legacy permissive rollup.
+   */
+  unverifiablePolicy?: UnverifiablePolicy;
+}
 
 export interface AuditWithJudgeOptions extends AuditOptions {
   /**
@@ -21,11 +30,17 @@ export interface AuditResult {
 }
 
 /**
- * Roll per-claim outcomes into one decision: any ungrounded claim blocks the
- * output, any unverifiable claim quarantines it, otherwise it ships. An output
- * with no factual claims in it has nothing to be wrong about, so it is allowed.
+ * Roll per-claim outcomes into one decision. Ungrounded claims always block.
+ * Unverifiable claims are also non-shippable by default: the guard could not
+ * confirm the output, so the output must not be delivered as though it were
+ * sourced. Callers with an explicit quarantine lane can opt into quarantine.
+ * An output with no factual claims in it has nothing to be wrong about, so it
+ * is allowed.
  */
-export function verdictFor(assessments: readonly ClaimAssessment[]): Verdict {
+export function verdictFor(
+  assessments: readonly ClaimAssessment[],
+  options: { unverifiablePolicy?: UnverifiablePolicy } = {},
+): Verdict {
   const reasons: Reason[] = [];
   for (const assessment of assessments) {
     if (assessment.reason) reasons.push(assessment.reason);
@@ -35,16 +50,19 @@ export function verdictFor(assessments: readonly ClaimAssessment[]): Verdict {
   const decision: Verdict["decision"] = statuses.has("ungrounded")
     ? "block"
     : statuses.has("unverifiable")
-      ? "quarantine"
+      ? (options.unverifiablePolicy ?? "block")
       : "allow";
 
   return { decision, reasons };
 }
 
-function toResult(assessments: ClaimAssessment[]): AuditResult {
+function toResult(
+  assessments: ClaimAssessment[],
+  options: { unverifiablePolicy?: UnverifiablePolicy } = {},
+): AuditResult {
   return {
     groundings: assessments.map((a) => a.grounding),
-    verdict: verdictFor(assessments),
+    verdict: verdictFor(assessments, options),
     assessments,
   };
 }
@@ -61,7 +79,10 @@ export function auditOutput(
   chunks: Chunk[],
   options: AuditOptions = {},
 ): AuditResult {
-  return toResult(extractClaims(output).map((claim) => assessClaim(claim, chunks, options)));
+  return toResult(
+    extractClaims(output).map((claim) => assessClaim(claim, chunks, options)),
+    options,
+  );
 }
 
 /**
@@ -73,7 +94,10 @@ export function checkGrounding(
   chunks: Chunk[],
   options: AuditOptions = {},
 ): AuditResult {
-  return toResult(claims.map((claim) => assessClaim(claim, chunks, options)));
+  return toResult(
+    claims.map((claim) => assessClaim(claim, chunks, options)),
+    options,
+  );
 }
 
 /** Coerce whatever the judge returned into an advisory worth recording. */
@@ -122,7 +146,7 @@ export async function auditOutputWithJudge(
   const assessments = extractClaims(output).map((claim) =>
     assessClaim(claim, chunks, groundOptions),
   );
-  if (!judge) return toResult(assessments);
+  if (!judge) return toResult(assessments, options);
 
   for (const assessment of assessments) {
     if (assessment.grounding.status !== "unverifiable") continue;
@@ -166,5 +190,5 @@ export async function auditOutputWithJudge(
     assessment.advisory = advisory;
   }
 
-  return toResult(assessments);
+  return toResult(assessments, options);
 }

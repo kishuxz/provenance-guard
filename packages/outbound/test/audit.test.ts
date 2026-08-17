@@ -149,7 +149,7 @@ describe("verdict rollup", () => {
     expect(result.verdict.decision).toBe("allow");
   });
 
-  it("quarantines when a claim is merely unverifiable", () => {
+  it("blocks by default when a claim is merely unverifiable", () => {
     const context = [
       chunk({
         id: "c1",
@@ -159,8 +159,43 @@ describe("verdict rollup", () => {
     const result = auditOutput("the checkout service handles refund requests carefully", context);
 
     expect(result.groundings.map((g) => g.status)).toEqual(["unverifiable"]);
+    expect(result.verdict.decision).toBe("block");
+    expect(result.verdict.reasons.map((r) => r.code)).toEqual(["CLAIM_UNVERIFIABLE"]);
+  });
+
+  it("can opt into quarantine for unverifiable claims", () => {
+    const context = [
+      chunk({
+        id: "c1",
+        text: "The checkout service handles payment authorization and refund requests.",
+      }),
+    ];
+    const result = auditOutput("the checkout service handles refund requests carefully", context, {
+      unverifiablePolicy: "quarantine",
+    });
+
+    expect(result.groundings.map((g) => g.status)).toEqual(["unverifiable"]);
     expect(result.verdict.decision).toBe("quarantine");
     expect(result.verdict.reasons.map((r) => r.code)).toEqual(["CLAIM_UNVERIFIABLE"]);
+  });
+
+  it("keeps unverifiable and fabricated reasons distinct", () => {
+    const context = [
+      chunk({
+        id: "c1",
+        text: "The checkout service handles payment authorization and refund requests.",
+      }),
+    ];
+    const unverifiable = auditOutput(
+      "the checkout service handles refund requests carefully",
+      context,
+    );
+    const fabricated = auditOutput("Orion Analytics signed the renewal.", context);
+
+    expect(unverifiable.verdict.decision).toBe("block");
+    expect(fabricated.verdict.decision).toBe("block");
+    expect(unverifiable.verdict.reasons[0]?.code).toBe("CLAIM_UNVERIFIABLE");
+    expect(fabricated.verdict.reasons[0]?.code).toBe("CLAIM_UNGROUNDED");
   });
 
   it("blocks when any claim is ungrounded, even alongside grounded ones", () => {
@@ -234,6 +269,7 @@ describe("the injected judge", () => {
   it("cannot ground a claim on its own say-so", async () => {
     const result = await auditOutputWithJudge(undecidable, context, {
       judge: judgeReturning("grounded"),
+      unverifiablePolicy: "quarantine",
     });
 
     expect(result.groundings[0]?.status).toBe("unverifiable");
@@ -244,6 +280,7 @@ describe("the injected judge", () => {
   it("degrades to the deterministic verdict when the judge throws", async () => {
     const result = await auditOutputWithJudge(undecidable, context, {
       judge: () => Promise.reject(new Error("judge upstream timed out")),
+      unverifiablePolicy: "quarantine",
     });
 
     expect(result.groundings[0]?.status).toBe("unverifiable");
@@ -254,6 +291,7 @@ describe("the injected judge", () => {
   it("ignores a judge that returns something unusable", async () => {
     const result = await auditOutputWithJudge(undecidable, context, {
       judge: () => Promise.resolve({ nonsense: true } as unknown as Grounding),
+      unverifiablePolicy: "quarantine",
     });
 
     expect(result.groundings[0]?.status).toBe("unverifiable");

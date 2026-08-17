@@ -52,12 +52,12 @@ describe("provguard bench", () => {
           "passed": false,
         },
         {
-          "actual": "allow",
-          "actualGate": "none",
+          "actual": "block",
+          "actualGate": "outbound",
           "expected": "should_block",
           "expectedGate": "outbound",
           "id": "hard-split-conjunction",
-          "passed": false,
+          "passed": true,
         },
         {
           "actual": "allow",
@@ -160,12 +160,12 @@ describe("provguard bench", () => {
         actualGate: "inbound",
       }),
     );
-    expect(result.summary.gateBreakdown.outboundValidated).toBe(0);
+    expect(result.summary.gateBreakdown.outboundValidated).toBe(1);
     expect(result.summary.gateBreakdown.expected.inbound).toBe(11);
-    expect(result.summary.gateBreakdown.actual.outbound).toBe(0);
+    expect(result.summary.gateBreakdown.actual.outbound).toBe(1);
     expect(table).toContain("expected_gate");
     expect(table).toContain("actual_gate");
-    expect(table).toContain("outbound gate validations: 0");
+    expect(table).toContain("outbound gate validations: 1");
   });
 
   it("prints saturation warnings for undersized perfect categories", async () => {
@@ -184,8 +184,6 @@ describe("provguard bench", () => {
     const result = await runBench({ monitor: true });
 
     expect(result.monitor).toBe(true);
-    // 8 basic blocks, plus the two hard inbound near misses now caught. The
-    // ninth was the hard-clean-error-vocabulary false positive, now admitted.
     expect(result.scenarios.filter((scenario) => scenario.wouldBlock)).toHaveLength(10);
     expect(result.scenarios.every((scenario) => scenario.actual === "allow")).toBe(true);
   });
@@ -219,7 +217,7 @@ describe("provguard bench", () => {
       expect(result.summary.recall).toHaveProperty("basic");
       expect(result.summary.recall).toHaveProperty("hard");
       expect(result.summary.falsePositiveRate).toHaveProperty("basic");
-      expect(result.summary.gateBreakdown.outboundValidated).toBe(0);
+      expect(result.summary.gateBreakdown.outboundValidated).toBe(1);
       expect(result.summary.saturationWarnings.length).toBeGreaterThan(0);
     } finally {
       log.mockRestore();
