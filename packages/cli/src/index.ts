@@ -493,7 +493,10 @@ async function importPackage(specifier: string): Promise<unknown> {
   return import(/* @vite-ignore */ specifier);
 }
 
-if (process.argv[1] !== undefined && basename(process.argv[1]) === "index.js") {
+if (
+  process.argv[1] !== undefined &&
+  (basename(process.argv[1]) === "index.js" || basename(process.argv[1]) === "provguard.js")
+) {
   const code = await main();
   process.exitCode = code;
 }

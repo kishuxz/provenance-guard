@@ -11,7 +11,7 @@
     }
   },
   "bin": {
-    "provguard": "./dist/index.js"
+    "provguard": "./bin/provguard.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
