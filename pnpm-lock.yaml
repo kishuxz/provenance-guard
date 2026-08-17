@@ -44,6 +44,21 @@ importers:
         specifier: workspace:*
         version: link:../schema
 
+  packages/demo:
+    dependencies:
+      "@provguard/harness":
+        specifier: workspace:*
+        version: link:../harness
+      "@provguard/inbound":
+        specifier: workspace:*
+        version: link:../inbound
+      "@provguard/outbound":
+        specifier: workspace:*
+        version: link:../outbound
+      "@provguard/schema":
+        specifier: workspace:*
+        version: link:../schema
+
   packages/harness: {}
 
   packages/inbound: {}
