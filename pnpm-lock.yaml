@@ -35,7 +35,11 @@ importers:
 
   packages/inbound: {}
 
-  packages/outbound: {}
+  packages/outbound:
+    dependencies:
+      "@provguard/schema":
+        specifier: workspace:*
+        version: link:../schema
 
   packages/schema:
     dependencies:
