@@ -76,12 +76,12 @@ describe("provguard bench", () => {
           "passed": false,
         },
         {
-          "actual": "allow",
-          "actualGate": "none",
+          "actual": "block",
+          "actualGate": "inbound",
           "expected": "should_block",
           "expectedGate": "inbound",
           "id": "hard-ok-status-error-body",
-          "passed": false,
+          "passed": true,
         },
         {
           "actual": "allow",
@@ -92,20 +92,20 @@ describe("provguard bench", () => {
           "passed": false,
         },
         {
-          "actual": "allow",
-          "actualGate": "none",
+          "actual": "block",
+          "actualGate": "inbound",
           "expected": "should_block",
           "expectedGate": "inbound",
           "id": "hard-json-shaped-diagnostic",
-          "passed": false,
+          "passed": true,
         },
         {
-          "actual": "block",
-          "actualGate": "inbound",
+          "actual": "allow",
+          "actualGate": "none",
           "expected": "should_allow",
           "expectedGate": "either",
           "id": "hard-clean-error-vocabulary",
-          "passed": false,
+          "passed": true,
         },
         {
           "actual": "allow",
@@ -184,7 +184,9 @@ describe("provguard bench", () => {
     const result = await runBench({ monitor: true });
 
     expect(result.monitor).toBe(true);
-    expect(result.scenarios.filter((scenario) => scenario.wouldBlock)).toHaveLength(9);
+    // 8 basic blocks, plus the two hard inbound near misses now caught. The
+    // ninth was the hard-clean-error-vocabulary false positive, now admitted.
+    expect(result.scenarios.filter((scenario) => scenario.wouldBlock)).toHaveLength(10);
     expect(result.scenarios.every((scenario) => scenario.actual === "allow")).toBe(true);
   });
 

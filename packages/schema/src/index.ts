@@ -69,6 +69,10 @@ export const ReasonCodes = [
   "CLAIM_UNGROUNDED",
   "CLAIM_SUPPORT_LOW_TIER",
   "CLAIM_UNVERIFIABLE",
+  /** The declared channel, tier or status disagrees with what the payload contains. */
+  "PROVENANCE_LABEL_MISMATCH",
+  /** The payload reports success while carrying a fallback, placeholder or degraded result. */
+  "RESULT_DEGRADED",
 ] as const;
 
 export const ReasonCodeSchema = z.enum(ReasonCodes);
