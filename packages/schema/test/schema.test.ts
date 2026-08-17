@@ -276,7 +276,8 @@ describe("GroundingSchema", () => {
 });
 
 function expectIssue(
-  result: { success: true } | { success: false; error: { issues: { code: string; path: unknown[] }[] } },
+  result:
+    { success: true } | { success: false; error: { issues: { code: string; path: unknown[] }[] } },
   code: string,
   path?: unknown[],
 ): void {
