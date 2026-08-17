@@ -9,7 +9,7 @@ This is incident D1 from the case study in arXiv:2606.14589, and it is the worke
 1. **A malformed byte.** A Unicode surrogate appears in a request payload.
 2. **A failed write.** The JSON serializer raises mid-stream. The write leaves a truncated body behind.
 3. **An error page captured as data.** The upstream returns `HTTP/1.1 400 Bad Request` with a JSON error body naming the parameters it expected: `industry, market, compliance, forecast, risk`. A shell command substitution captures that diagnostic from stdout into the slot where vendor data was supposed to land.
-4. **A fabricated analysis, delivered.** The model reads the error page as evidence and infers a trend from the *vocabulary of the error message*:
+4. **A fabricated analysis, delivered.** The model reads the error page as evidence and infers a trend from the _vocabulary of the error message_:
 
    > Battery suppliers are shifting from raw growth messaging toward compliance-led forecasting. The strongest signal is the repeated pairing of industry, market, compliance, forecast, and risk language, which suggests executives are framing the sector around regulatory readiness rather than pure expansion.
 
@@ -105,14 +105,14 @@ EOF
 node packages/cli/dist/cli/src/index.js check polluted.json
 ```
 
-`check` exits `1` when it blocks, so it can gate a pipeline. Add `--monitor` to either command to record what *would* have been blocked without actually blocking it.
+`check` exits `1` when it blocks, so it can gate a pipeline. Add `--monitor` to either command to record what _would_ have been blocked without actually blocking it.
 
 ## Packages
 
-| Package | Role |
-| --- | --- |
-| `@provguard/schema` | Shared types: `Chunk`, `Provenance`, `Verdict`, `ReasonCode`, slot policy |
-| `@provguard/inbound` | Chunk classification and slot admission |
-| `@provguard/outbound` | Claim extraction and grounding |
-| `@provguard/harness` | The ten deterministic scenarios |
-| `@provguard/cli` | `provguard check` and `provguard bench` |
+| Package               | Role                                                                      |
+| --------------------- | ------------------------------------------------------------------------- |
+| `@provguard/schema`   | Shared types: `Chunk`, `Provenance`, `Verdict`, `ReasonCode`, slot policy |
+| `@provguard/inbound`  | Chunk classification and slot admission                                   |
+| `@provguard/outbound` | Claim extraction and grounding                                            |
+| `@provguard/harness`  | The ten deterministic scenarios                                           |
+| `@provguard/cli`      | `provguard check` and `provguard bench`                                   |

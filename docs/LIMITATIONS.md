@@ -21,7 +21,7 @@ The six derived scenarios reproduce mechanisms from arXiv:2606.14589. That sourc
 
 The reasonable conclusion is narrow: **these mechanisms are real, and they occurred at least once in a production system.** That is the whole claim. Any of the following would be unsupported:
 
-- That these are the *most common* pollution mechanisms.
+- That these are the _most common_ pollution mechanisms.
 - That their relative frequencies in that study generalize to other runtimes.
 - That six mechanisms are an exhaustive taxonomy. They are not, and the study does not claim to be.
 
@@ -58,16 +58,16 @@ This was a deliberate trade: widening the schema enum would be a cross-package c
 
 The guards only prevent a bad delivery if they sit **inline, synchronously, between context assembly and the model, and between the model and the user**. That is a high adoption bar. It means accepting added latency in the request path, and accepting that a bug in the guard can block legitimate traffic — a new way for the system to fail, in exchange for closing an existing one. Most teams will not put an unproven component there, and that caution is correct.
 
-**Monitor mode exists for exactly this reason.** `--monitor` on either command runs every check and records what *would* have been blocked, while allowing delivery. It is the honest first deployment: it produces a false-positive rate on your own traffic, which is the number this repo most conspicuously lacks. Run it there before considering blocking mode.
+**Monitor mode exists for exactly this reason.** `--monitor` on either command runs every check and records what _would_ have been blocked, while allowing delivery. It is the honest first deployment: it produces a false-positive rate on your own traffic, which is the number this repo most conspicuously lacks. Run it there before considering blocking mode.
 
 Monitor mode prevents nothing. A chain observed in monitor mode was still delivered to the user.
 
 ## Summary
 
-| Claim | Support |
-| --- | --- |
-| These mechanisms occur in production | One draft case study, one system, eight weeks, self-annotated |
-| The guards catch them deterministically | 6/6 derived and 2/2 constructed on a fixed ten-scenario set |
-| The guards don't over-block | 2 clean controls — not a false-positive rate |
-| Normal test suites miss these | Shape baseline catches 0/8; every polluted output is a well-formed non-empty string |
-| The guards work on your system | **Not supported.** Run monitor mode and find out |
+| Claim                                   | Support                                                                             |
+| --------------------------------------- | ----------------------------------------------------------------------------------- |
+| These mechanisms occur in production    | One draft case study, one system, eight weeks, self-annotated                       |
+| The guards catch them deterministically | 6/6 derived and 2/2 constructed on a fixed ten-scenario set                         |
+| The guards don't over-block             | 2 clean controls — not a false-positive rate                                        |
+| Normal test suites miss these           | Shape baseline catches 0/8; every polluted output is a well-formed non-empty string |
+| The guards work on your system          | **Not supported.** Run monitor mode and find out                                    |
