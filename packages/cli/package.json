@@ -10,7 +10,16 @@
       "default": "./dist/index.js"
     }
   },
+  "bin": {
+    "provguard": "./dist/index.js"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@provguard/harness": "workspace:*",
+    "@provguard/inbound": "workspace:*",
+    "@provguard/outbound": "workspace:*",
+    "@provguard/schema": "workspace:*"
   }
 }

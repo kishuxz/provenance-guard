@@ -1,6 +1,13 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@provguard/harness": ["../harness/src/index.ts"],
+      "@provguard/inbound": ["../inbound/src/index.ts"],
+      "@provguard/outbound": ["../outbound/src/index.ts"],
+      "@provguard/schema": ["../schema/src/index.ts"]
+    },
     "outDir": "dist"
   },
   "include": ["src/**/*.ts"]
