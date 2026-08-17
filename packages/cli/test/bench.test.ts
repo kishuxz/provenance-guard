@@ -10,6 +10,9 @@ describe("provguard bench", () => {
     for (const scenario of result.scenarios) {
       expect(scenario.passed, scenario.id).toBe(true);
       expect(scenario.actual).toBe(scenario.expected === "should_block" ? "block" : "allow");
+      if (scenario.expected === "should_allow") {
+        expect(scenario.reasonCode).toBeNull();
+      }
     }
   });
 
