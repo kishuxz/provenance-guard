@@ -3,10 +3,16 @@ import { readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 import process from "node:process";
 
-import { DEFAULT_POLICY, checkSlot, classifyChunk } from "@provguard/inbound";
-import { listScenarios, type Scenario, type ScenarioExpectation } from "@provguard/harness";
-import { auditOutput } from "@provguard/outbound";
-import type { Chunk, ContextSlot, Provenance, Reason, ReasonCode, SlotPolicy } from "@provguard/schema";
+import type { Scenario, ScenarioExpectation } from "@provguard/harness";
+import type {
+  Chunk,
+  ContextSlot,
+  Provenance,
+  Reason,
+  ReasonCode,
+  SlotPolicy,
+  Verdict,
+} from "@provguard/schema";
 
 type Outcome = "allow" | "block";
 type GuardStage = "inbound" | "outbound" | "none";
@@ -36,8 +42,28 @@ interface PipelineResult {
   reasons: Reason[];
   classifiedChunks: Chunk[];
   deliveredChunks: Chunk[];
-  inboundVerdicts: Array<{ chunkId: string; verdict: ReturnType<typeof checkSlot> }>;
-  outboundVerdict: ReturnType<typeof auditOutput>["verdict"];
+  inboundVerdicts: Array<{ chunkId: string; verdict: Verdict }>;
+  outboundVerdict: Verdict;
+}
+
+interface InboundRuntime {
+  DEFAULT_POLICY: SlotPolicy;
+  checkSlot(chunk: Chunk, slot: ContextSlot): Verdict;
+  classifyChunk(raw: string, hints?: Partial<Provenance>): Chunk;
+}
+
+interface HarnessRuntime {
+  listScenarios(): Scenario[];
+}
+
+interface OutboundRuntime {
+  auditOutput(output: string, chunks: Chunk[]): { verdict: Verdict };
+}
+
+interface Runtime {
+  inbound: InboundRuntime;
+  harness: HarnessRuntime;
+  outbound: OutboundRuntime;
 }
 
 export interface BenchScenarioResult {
@@ -99,16 +125,20 @@ export async function runCheckFile(
 ): Promise<PipelineResult> {
   const payload = JSON.parse(await readFile(filePath, "utf8")) as unknown;
   const input = parseCheckInput(payload);
-  return runPipeline(input.chunks, input.output, {
-    policy: input.policy ?? DEFAULT_POLICY,
+  const runtime = await loadRuntime();
+  return runPipeline(runtime, input.chunks, input.output, {
+    policy: input.policy ?? runtime.inbound.DEFAULT_POLICY,
     slotName: input.slot ?? DEFAULT_SLOT_NAME,
     monitor: options.monitor ?? false,
   });
 }
 
-export function runBench(options: { monitor?: boolean } = {}): BenchResult {
+export async function runBench(options: { monitor?: boolean } = {}): Promise<BenchResult> {
+  const runtime = await loadRuntime();
   const monitor = options.monitor ?? false;
-  const scenarios = listScenarios().map((scenario) => runBenchScenario(scenario, monitor));
+  const scenarios = runtime.harness
+    .listScenarios()
+    .map((scenario) => runBenchScenario(runtime, scenario, monitor));
 
   return {
     monitor,
@@ -162,7 +192,8 @@ export function formatCheckResult(result: PipelineResult): string {
       return `inbound ${chunkId}: ${verdict.decision} [${codes}]`;
     })
     .join("\n");
-  const outboundCodes = result.outboundVerdict.reasons.map((reason) => reason.code).join(", ") || "-";
+  const outboundCodes =
+    result.outboundVerdict.reasons.map((reason) => reason.code).join(", ") || "-";
 
   return [
     `outcome: ${result.outcome}`,
@@ -175,15 +206,20 @@ export function formatCheckResult(result: PipelineResult): string {
     .join("\n");
 }
 
-function runBenchScenario(scenario: Scenario, monitor: boolean): BenchScenarioResult {
+function runBenchScenario(
+  runtime: Runtime,
+  scenario: Scenario,
+  monitor: boolean,
+): BenchScenarioResult {
   const pipeline = runPipeline(
+    runtime,
     scenario.chunks.map((chunk) => ({
       id: chunk.id,
       text: chunk.text,
       provenance: chunk.provenance,
     })),
     scenario.simulatedOutput,
-    { policy: DEFAULT_POLICY, slotName: DEFAULT_SLOT_NAME, monitor },
+    { policy: runtime.inbound.DEFAULT_POLICY, slotName: DEFAULT_SLOT_NAME, monitor },
   );
   const expectedOutcome = scenario.expectation === "should_block" ? "block" : "allow";
   const actual = monitor ? "allow" : pipeline.outcome;
@@ -243,21 +279,22 @@ function catchRate(results: BenchScenarioResult[]): string {
 }
 
 function runPipeline(
+  runtime: Runtime,
   chunks: CheckInput["chunks"],
   output: string,
   options: { policy: SlotPolicy; slotName: string; monitor: boolean },
 ): PipelineResult {
   const slot = resolveSlot(options.policy, options.slotName);
-  const classifiedChunks = chunks.map(toChunk);
+  const classifiedChunks = chunks.map((chunk) => toChunk(runtime, chunk));
   const inboundVerdicts = classifiedChunks.map((chunk) => ({
     chunkId: chunk.id,
-    verdict: checkSlot(chunk, slot),
+    verdict: runtime.inbound.checkSlot(chunk, slot),
   }));
   const inboundBlock = inboundVerdicts.find(({ verdict }) => verdict.decision === "block");
   const deliveredChunks = inboundVerdicts
     .filter(({ verdict }) => verdict.decision === "allow")
     .map(({ chunkId }) => requiredChunk(classifiedChunks, chunkId));
-  const outbound = auditOutput(output, deliveredChunks);
+  const outbound = runtime.outbound.auditOutput(output, deliveredChunks);
   const outboundBlocks = outbound.verdict.decision === "block";
   const blocked = inboundBlock !== undefined || outboundBlocks;
   const stage: GuardStage =
@@ -283,9 +320,9 @@ function runPipeline(
   };
 }
 
-function toChunk(input: string | CheckInputChunk): Chunk {
+function toChunk(runtime: Runtime, input: string | CheckInputChunk): Chunk {
   if (typeof input === "string") {
-    return classifyChunk(input);
+    return runtime.inbound.classifyChunk(input);
   }
 
   const text = input.text ?? input.raw;
@@ -293,7 +330,7 @@ function toChunk(input: string | CheckInputChunk): Chunk {
     throw new Error("Each chunk object must include text or raw.");
   }
 
-  const chunk = classifyChunk(text, input.provenance);
+  const chunk = runtime.inbound.classifyChunk(text, input.provenance);
   return input.id === undefined ? chunk : { ...chunk, id: input.id };
 }
 
@@ -373,7 +410,7 @@ async function runCheckCommand(
 }
 
 async function runBenchCommand(flags: { monitor: boolean; json: boolean }): Promise<number> {
-  const result = runBench({ monitor: flags.monitor });
+  const result = await runBench({ monitor: flags.monitor });
   console.log(formatBenchTable(result));
 
   if (flags.json) {
@@ -424,7 +461,10 @@ function formatRows(rows: string[][]): string[] {
   if (widths === undefined) return [];
 
   return rows.map((row) =>
-    row.map((cell, index) => cell.padEnd(widths[index] ?? 0)).join("  ").trimEnd(),
+    row
+      .map((cell, index) => cell.padEnd(widths[index] ?? 0))
+      .join("  ")
+      .trimEnd(),
   );
 }
 
@@ -433,6 +473,31 @@ function formatBreakdown<T extends string>(breakdown: Partial<Record<T, number>>
     .filter(([, value]) => value !== 0)
     .map(([key, value]) => `${key}=${String(value)}`)
     .join(", ");
+}
+
+async function loadRuntime(): Promise<Runtime> {
+  if (process.env.VITEST_WORKER_ID !== undefined) {
+    const [inbound, harness, outbound] = await Promise.all([
+      import(/* @vite-ignore */ new URL("../../inbound/src/index.js", import.meta.url).href),
+      import(/* @vite-ignore */ new URL("../../harness/src/index.js", import.meta.url).href),
+      import(/* @vite-ignore */ new URL("../../outbound/src/index.js", import.meta.url).href),
+    ]);
+    return {
+      inbound: inbound as InboundRuntime,
+      harness: harness as HarnessRuntime,
+      outbound: outbound as OutboundRuntime,
+    };
+  }
+
+  const packageSpecifiers = ["@provguard/inbound", "@provguard/harness", "@provguard/outbound"];
+  const [inbound, harness, outbound] = await Promise.all(
+    packageSpecifiers.map((specifier) => import(/* @vite-ignore */ specifier)),
+  );
+  return {
+    inbound: inbound as InboundRuntime,
+    harness: harness as HarnessRuntime,
+    outbound: outbound as OutboundRuntime,
+  };
 }
 
 if (process.argv[1] !== undefined && basename(process.argv[1]) === "index.js") {
