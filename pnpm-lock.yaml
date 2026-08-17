@@ -74,6 +74,15 @@ importers:
         specifier: workspace:*
         version: link:../schema
 
+  packages/judge:
+    dependencies:
+      "@provguard/outbound":
+        specifier: workspace:*
+        version: link:../outbound
+      "@provguard/schema":
+        specifier: workspace:*
+        version: link:../schema
+
   packages/outbound:
     dependencies:
       "@provguard/schema":

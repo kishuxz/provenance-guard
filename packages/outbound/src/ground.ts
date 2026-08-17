@@ -128,6 +128,36 @@ function stageNormalized(claim: Claim, prepared: PreparedChunk[]): StageHit | nu
 }
 
 /**
+ * Stage 2b: still a normalized fuzzy match, but tolerant of inserted status
+ * words in a tool result. This only grounds when almost every content word in
+ * the claim appears in the same chunk; it is deliberately stricter than the
+ * lexical rejection stage below.
+ */
+function stageNormalizedCoverage(claim: Claim, prepared: PreparedChunk[]): StageHit | null {
+  if (extractEntities(claim.text).length > 0 || extractNumbers(claim.text).length > 0) return null;
+
+  const claimTokens = contentTokens(claim.text);
+  if (claimTokens.length === 0) return null;
+
+  const candidates = prepared
+    .map((p) => {
+      const matched = claimTokens.filter((token) => p.tokens.has(token)).length;
+      return { p, matched, ratio: matched / claimTokens.length };
+    })
+    .filter(({ ratio }) => ratio >= 0.9);
+  if (candidates.length === 0) return null;
+
+  const supporting = candidates.map(({ p }) => p);
+  const best = Math.max(...candidates.map(({ ratio }) => ratio));
+  return makeHit(
+    "normalized",
+    SCORES.normalized,
+    supporting,
+    `claim has ${(best * 100).toFixed(1)}% normalized content-word coverage in a single chunk`,
+  );
+}
+
+/**
  * Stage 3: the hard specifics -- names, identifiers and numbers.
  *
  * A claim is only as sourced as its least sourced specific, so every one of
@@ -268,6 +298,7 @@ export function assessClaim(
   const stages: Array<StageHit | null> = [];
   stages.push(stageExact(claim, prepared));
   stages.push(stageNormalized(claim, prepared));
+  stages.push(stageNormalizedCoverage(claim, prepared));
 
   const specifics = stageSpecifics(claim, prepared, resolved);
   stages.push(specifics.hit ?? null);
