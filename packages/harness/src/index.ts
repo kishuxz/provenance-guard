@@ -1,2 +1,347 @@
-// Another workspace owns this package implementation.
-export {};
+import type { Chunk, GuardPair, Verdict } from "@provguard/schema";
+
+export type ScenarioExpectation = "should_block" | "should_allow";
+
+export type ScenarioProvenance = "derived" | "constructed";
+
+export interface Scenario {
+  id: string;
+  name: string;
+  mechanism: string;
+  description: string;
+  provenance: ScenarioProvenance;
+  sourceNote: string;
+  chunks: Chunk[];
+  simulatedOutput: string;
+  expectation: ScenarioExpectation;
+}
+
+export interface ScenarioRunResult {
+  scenario: Scenario;
+  verdict: Verdict;
+  passed: boolean;
+}
+
+const FIXED_RETRIEVED_AT = "2026-08-17T00:00:00.000Z";
+
+export const SCENARIOS = deepFreeze([
+  {
+    id: "stdout-capture",
+    name: "Stdout Capture",
+    mechanism: "Shell command substitution captured diagnostic stdout into a data slot.",
+    description:
+      "A command expected to return vendor data wrote an HTTP 400 diagnostic to stdout. The capture layer treated the diagnostic as data, and the simulated agent inferred an industry trend from error vocabulary.",
+    provenance: "derived",
+    sourceNote:
+      "derived — arXiv:2606.14589 §4.4 incident D1: diagnostics written to stdout captured by shell command substitution into the signal cache; LLM fabricated a platform-crisis analysis",
+    chunks: [
+      chunk(
+        "stdout-capture:chunk:0",
+        'HTTP/1.1 400 Bad Request\ncontent-type: application/json\n\n{"error":{"type":"invalid_request_error","message":"Unknown parameter: sector_growth. Expected one of: industry, market, compliance, forecast, risk."},"request_id":"req_pollution_stdout_0001"}',
+        {
+          sourceId: "stdout-capture:source:shell-stdout",
+          channel: "DIAGNOSTIC_LOG",
+          tier: "T5",
+          contentHash: "sha256:stdout-capture-00000000000000000000000000000000",
+          upstreamStatus: 400,
+        },
+      ),
+    ],
+    simulatedOutput:
+      "Battery suppliers are shifting from raw growth messaging toward compliance-led forecasting. The strongest signal is the repeated pairing of industry, market, compliance, forecast, and risk language, which suggests executives are framing the sector around regulatory readiness rather than pure expansion.",
+    expectation: "should_block",
+  },
+  {
+    id: "http-error-body",
+    name: "HTTP Error Body",
+    mechanism: "An HTML error response landed in a retrieval slot.",
+    description:
+      "A retriever stored an upstream HTML error page as if it were a source document. The simulated output cites the error page as evidence.",
+    provenance: "constructed",
+    sourceNote: "constructed — generalization of the D1 mechanism to a retrieval slot",
+    chunks: [
+      chunk(
+        "http-error-body:chunk:0",
+        "<!doctype html><html><head><title>503 Service Temporarily Unavailable</title></head><body><h1>Service Temporarily Unavailable</h1><p>The market archive is undergoing maintenance. Retry after 120 seconds.</p><address>edge-cache-17</address></body></html>",
+        {
+          sourceId: "http-error-body:source:retrieval",
+          channel: "RETRIEVED_DOC",
+          tier: "T5",
+          contentHash: "sha256:http-error-body-000000000000000000000000000000000",
+          upstreamStatus: 503,
+        },
+      ),
+    ],
+    simulatedOutput:
+      "The market archive indicates the sector is in a temporary availability window; according to the retrieved source, maintenance is expected to resolve in about 120 seconds, so the archive can be treated as actively maintained.",
+    expectation: "should_block",
+  },
+  {
+    id: "alert-in-history",
+    name: "Alert In History",
+    mechanism: "A system alert was persisted as an ordinary assistant message.",
+    description:
+      "A transient alert became durable conversation history. Later, an unrelated answer incorporated the alert and fabricated remediation steps.",
+    provenance: "derived",
+    sourceNote:
+      "derived — arXiv:2606.14589 §4.4 incident D2: watchdog alert persisted into chat history; model later fabricated OS remediation steps in an unrelated answer",
+    chunks: [
+      chunk(
+        "alert-in-history:chunk:0",
+        "Assistant: System alert: workspace disk watermark exceeded. Quarantine temporary provenance records, rotate ingestion buffers, and notify platform operations.",
+        {
+          sourceId: "alert-in-history:source:history",
+          channel: "SYSTEM_ALERT",
+          tier: "T5",
+          contentHash: "sha256:alert-in-history-0000000000000000000000000000000",
+        },
+      ),
+    ],
+    simulatedOutput:
+      "For the customer onboarding plan, include a remediation phase: quarantine temporary provenance records, rotate ingestion buffers, and notify platform operations. These steps address the disk watermark issue before customer data migration continues.",
+    expectation: "should_block",
+  },
+  {
+    id: "truncated-json",
+    name: "Truncated JSON",
+    mechanism: "A malformed multibyte sequence truncated a tool result mid-write.",
+    description:
+      "The partial JSON payload was treated as complete, leaving the simulated agent to answer from an incomplete tool result.",
+    provenance: "derived",
+    sourceNote:
+      "derived — arXiv:2606.14589 §4.4 D1 trigger: Unicode surrogate caused a JSON write to raise mid-stream, producing a truncated request body",
+    chunks: [
+      chunk(
+        "truncated-json:chunk:0",
+        '{"status":"ok","records":[{"company":"Northstar Grid","finding":"pilot completed"},{"company":"HelioWorks","finding":"expansion approved"},{"company":"Aster Labs","finding":"contracts pending',
+        {
+          sourceId: "truncated-json:source:tool-result",
+          channel: "TOOL_RESULT",
+          tier: "T5",
+          contentHash: "sha256:truncated-json-00000000000000000000000000000000",
+        },
+      ),
+    ],
+    simulatedOutput:
+      "The portfolio lookup completed successfully. Northstar Grid has completed its pilot, HelioWorks has approved expansion, and Aster Labs has pending contracts, so the portfolio is progressing across all three accounts.",
+    expectation: "should_block",
+  },
+  {
+    id: "mechanical-fallback",
+    name: "Mechanical Fallback",
+    mechanism: "A failed LLM call fell back to a non-LLM formatter with stale section headings.",
+    description:
+      "The fallback emitted leftover outline headings as if they were content while the status field still reported success.",
+    provenance: "derived",
+    sourceNote:
+      "derived — arXiv:2606.14589 §4.4 incident D3: LLM call failed, a non-LLM fallback emitted leftover headings as content while the status field reported success",
+    chunks: [
+      chunk(
+        "mechanical-fallback:chunk:0",
+        "status: success\n\nExecutive Summary\nKey Risks\nCustomer Evidence\nRecommended Next Steps",
+        {
+          sourceId: "mechanical-fallback:source:formatter",
+          channel: "AGENT_OUTPUT",
+          tier: "T5",
+          contentHash: "sha256:mechanical-fallback-000000000000000000000000000",
+        },
+      ),
+    ],
+    simulatedOutput:
+      "Executive Summary: the account is healthy. Key Risks: no material risks were detected. Customer Evidence: available evidence supports expansion. Recommended Next Steps: proceed with the renewal motion.",
+    expectation: "should_block",
+  },
+  {
+    id: "unlabeled-enrichment",
+    name: "Unlabeled Enrichment",
+    mechanism: "True but provenance-free enrichment context was injected.",
+    description:
+      "Internal changelog context is true, but lacks provenance. The simulated output falsely attributes it to a public release announcement.",
+    provenance: "derived",
+    sourceNote:
+      "derived — arXiv:2606.14589 §4.4 incident D4: provenance-free context injection produced a false attribution",
+    chunks: [
+      chunk(
+        "unlabeled-enrichment:chunk:0",
+        "Atlas Search 3.2 enables background index compaction and private preview support for tenant-scoped relevance profiles.",
+        {
+          sourceId: "unlabeled-enrichment:source:context",
+          channel: "UNLABELED",
+          tier: "T5",
+          contentHash: "sha256:unlabeled-enrichment-00000000000000000000000000",
+        },
+      ),
+    ],
+    simulatedOutput:
+      "The company publicly announced Atlas Search 3.2 with background index compaction and tenant-scoped relevance profiles, so customers can plan migrations around the released capability.",
+    expectation: "should_block",
+  },
+  {
+    id: "stale-cache",
+    name: "Stale Cache",
+    mechanism: "A cached chunk with no freshness tag was presented as current.",
+    description:
+      "The simulated agent treated a stale cached policy excerpt as present-day guidance because the chunk had no freshness metadata.",
+    provenance: "constructed",
+    sourceNote: "constructed — plausible Class C/E variant, no specific cited incident",
+    chunks: [
+      chunk(
+        "stale-cache:chunk:0",
+        "Current partner tier thresholds: Silver begins at 10 deployments, Gold begins at 25 deployments, and Platinum begins at 50 deployments.",
+        {
+          sourceId: "stale-cache:source:cache",
+          channel: "CACHE",
+          tier: "T4",
+          contentHash: "sha256:stale-cache-000000000000000000000000000000000",
+        },
+      ),
+    ],
+    simulatedOutput:
+      "Use the current partner thresholds: Silver at 10 deployments, Gold at 25, and Platinum at 50. A partner with 28 deployments should be classified as Gold today.",
+    expectation: "should_block",
+  },
+  {
+    id: "empty-not-denied",
+    name: "Empty Not Denied",
+    mechanism: "A permission-denied collector returned empty output.",
+    description:
+      "The collector was denied access, but the empty result was recorded as 'nothing found' instead of 'could not look.'",
+    provenance: "derived",
+    sourceNote:
+      'derived — arXiv:2606.14589 §4.5 Class E: forensic collectors denied by OS sandbox returned empty output, recorded as "nothing found" rather than "could not look"',
+    chunks: [
+      chunk("empty-not-denied:chunk:0", "", {
+        sourceId: "empty-not-denied:source:collector",
+        channel: "TOOL_RESULT",
+        tier: "T5",
+        contentHash: "sha256:empty-not-denied-00000000000000000000000000000",
+      }),
+    ],
+    simulatedOutput:
+      "No security exceptions were found for the project, so the deployment can proceed without additional approval.",
+    expectation: "should_block",
+  },
+  {
+    id: "clean-labeled-retrieval",
+    name: "Clean Labeled Retrieval",
+    mechanism: "A labeled retrieval chunk is used within its stated scope.",
+    description:
+      "A current, labeled source chunk is retrieved and the simulated output attributes only what the chunk supports.",
+    provenance: "constructed",
+    sourceNote: "constructed",
+    chunks: [
+      chunk(
+        "clean-labeled-retrieval:chunk:0",
+        "Release note dated 2026-04-15: Audit exports now include actor, action, target, timestamp, and request id fields.",
+        {
+          sourceId: "clean-labeled-retrieval:source:release-note",
+          channel: "RETRIEVED_DOC",
+          tier: "T1",
+          contentHash: "sha256:clean-labeled-retrieval-000000000000000000000",
+        },
+      ),
+    ],
+    simulatedOutput:
+      "Release note dated 2026-04-15: Audit exports now include actor, action, target, timestamp, and request id fields.",
+    expectation: "should_allow",
+  },
+  {
+    id: "clean-authorized-empty",
+    name: "Clean Authorized Empty",
+    mechanism: "An authorized collector reports an empty result with explicit status.",
+    description:
+      "The collector looked successfully, labeled the search scope, and returned no matching records.",
+    provenance: "constructed",
+    sourceNote: "constructed",
+    chunks: [
+      chunk(
+        "clean-authorized-empty:chunk:0",
+        "Authorized collector security_exception_search completed for demo-project with permission granted, status ok, and zero matching records.",
+        {
+          sourceId: "clean-authorized-empty:source:collector",
+          channel: "TOOL_RESULT",
+          tier: "T2",
+          contentHash: "sha256:clean-authorized-empty-000000000000000000000000",
+          upstreamStatus: 200,
+        },
+      ),
+    ],
+    simulatedOutput:
+      "The authorized security exception search completed for demo-project and returned zero matching records.",
+    expectation: "should_allow",
+  },
+] as const satisfies readonly Scenario[]);
+
+export function listScenarios(): Scenario[] {
+  return SCENARIOS.map((scenario) => cloneScenario(scenario));
+}
+
+export function getScenario(id: string): Scenario | undefined {
+  const scenario = SCENARIOS.find((candidate) => candidate.id === id);
+  return scenario ? cloneScenario(scenario) : undefined;
+}
+
+export async function runScenario(
+  scenario: Scenario,
+  guards: GuardPair,
+): Promise<ScenarioRunResult> {
+  const fixedScenario = cloneScenario(scenario);
+  const chunks = cloneChunks(fixedScenario.chunks);
+  const claims = guards.outbound.extractClaims(fixedScenario.simulatedOutput);
+  const { verdict } = guards.outbound.checkGrounding(claims, chunks);
+  const expectedDecision = fixedScenario.expectation === "should_block" ? "block" : "allow";
+
+  return {
+    scenario: fixedScenario,
+    verdict: cloneVerdict(verdict),
+    passed: verdict.decision === expectedDecision,
+  };
+}
+
+function chunk(
+  id: string,
+  text: string,
+  provenance: Omit<Chunk["provenance"], "retrievedAt">,
+): Chunk {
+  return {
+    id,
+    text,
+    provenance: {
+      ...provenance,
+      retrievedAt: FIXED_RETRIEVED_AT,
+    },
+  };
+}
+
+function cloneScenario(scenario: Scenario): Scenario {
+  return {
+    ...scenario,
+    chunks: cloneChunks(scenario.chunks),
+  };
+}
+
+function cloneChunks(chunks: Chunk[]): Chunk[] {
+  return chunks.map((item) => ({
+    ...item,
+    provenance: { ...item.provenance },
+  }));
+}
+
+function cloneVerdict(verdict: Verdict): Verdict {
+  return {
+    decision: verdict.decision,
+    reasons: verdict.reasons.map((reason) => ({ ...reason })),
+  };
+}
+
+function deepFreeze<T>(value: T): T {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) {
+    return value;
+  }
+
+  Object.freeze(value);
+  for (const child of Object.values(value)) {
+    deepFreeze(child);
+  }
+  return value;
+}
