@@ -29,7 +29,20 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@24.13.3)
 
-  packages/cli: {}
+  packages/cli:
+    dependencies:
+      "@provguard/harness":
+        specifier: workspace:*
+        version: link:../harness
+      "@provguard/inbound":
+        specifier: workspace:*
+        version: link:../inbound
+      "@provguard/outbound":
+        specifier: workspace:*
+        version: link:../outbound
+      "@provguard/schema":
+        specifier: workspace:*
+        version: link:../schema
 
   packages/harness: {}
 
