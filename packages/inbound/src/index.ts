@@ -551,19 +551,6 @@ function jsonStringValues(value: unknown): string[] {
   return out;
 }
 
-function detectJsonErrorStatus(text: string): number | undefined {
-  const trimmed = text.trim();
-  if (!/^[{[]/.test(trimmed)) {
-    return undefined;
-  }
-
-  try {
-    return findStatus(JSON.parse(trimmed));
-  } catch {
-    return undefined;
-  }
-}
-
 function findStatus(value: unknown): number | undefined {
   if (value === null || typeof value !== "object") {
     return undefined;
