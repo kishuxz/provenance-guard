@@ -1,6 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@provguard/schema": ["../schema/src/index.ts"]
+    },
     "outDir": "dist"
   },
   "include": ["src/**/*.ts"]
