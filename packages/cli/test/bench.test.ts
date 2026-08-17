@@ -10,7 +10,7 @@ describe("provguard bench", () => {
   it("matches basic harness scenario expectations", async () => {
     const result = await runBench();
 
-    expect(result.scenarios).toHaveLength(10);
+    expect(result.scenarios).toHaveLength(22);
     for (const scenario of result.scenarios.filter((item) => item.difficulty === "basic")) {
       expect(scenario.passed, scenario.id).toBe(true);
       expect(scenario.actual).toBe(scenario.expected === "should_block" ? "block" : "allow");
@@ -33,7 +33,106 @@ describe("provguard bench", () => {
         passed: scenario.passed,
       }));
 
-    expect(hardOutcomes).toMatchInlineSnapshot("[]");
+    expect(hardOutcomes).toMatchInlineSnapshot(`
+      [
+        {
+          "actual": "allow",
+          "actualGate": "none",
+          "expected": "should_block",
+          "expectedGate": "outbound",
+          "id": "hard-paraphrased-fabrication",
+          "passed": false,
+        },
+        {
+          "actual": "allow",
+          "actualGate": "none",
+          "expected": "should_block",
+          "expectedGate": "outbound",
+          "id": "hard-recombined-entities",
+          "passed": false,
+        },
+        {
+          "actual": "allow",
+          "actualGate": "none",
+          "expected": "should_block",
+          "expectedGate": "outbound",
+          "id": "hard-split-conjunction",
+          "passed": false,
+        },
+        {
+          "actual": "allow",
+          "actualGate": "none",
+          "expected": "should_block",
+          "expectedGate": "outbound",
+          "id": "hard-unit-shift",
+          "passed": false,
+        },
+        {
+          "actual": "allow",
+          "actualGate": "none",
+          "expected": "should_block",
+          "expectedGate": "outbound",
+          "id": "hard-appended-qualifier",
+          "passed": false,
+        },
+        {
+          "actual": "allow",
+          "actualGate": "none",
+          "expected": "should_block",
+          "expectedGate": "inbound",
+          "id": "hard-ok-status-error-body",
+          "passed": false,
+        },
+        {
+          "actual": "allow",
+          "actualGate": "none",
+          "expected": "should_block",
+          "expectedGate": "inbound",
+          "id": "hard-fresh-timestamp-stale-body",
+          "passed": false,
+        },
+        {
+          "actual": "allow",
+          "actualGate": "none",
+          "expected": "should_block",
+          "expectedGate": "inbound",
+          "id": "hard-json-shaped-diagnostic",
+          "passed": false,
+        },
+        {
+          "actual": "block",
+          "actualGate": "inbound",
+          "expected": "should_allow",
+          "expectedGate": "either",
+          "id": "hard-clean-error-vocabulary",
+          "passed": false,
+        },
+        {
+          "actual": "allow",
+          "actualGate": "none",
+          "expected": "should_allow",
+          "expectedGate": "either",
+          "id": "hard-clean-t3-support",
+          "passed": true,
+        },
+        {
+          "actual": "allow",
+          "actualGate": "none",
+          "expected": "should_allow",
+          "expectedGate": "either",
+          "id": "hard-clean-entity-overlap",
+          "passed": true,
+        },
+        {
+          "actual": "allow",
+          "actualGate": "none",
+          "expected": "should_allow",
+          "expectedGate": "either",
+          "id": "hard-clean-authorized-empty",
+          "passed": true,
+        },
+      ]
+    `);
   });
 
   it("reports recall and false-positive rates by difficulty", async () => {
@@ -62,7 +161,7 @@ describe("provguard bench", () => {
       }),
     );
     expect(result.summary.gateBreakdown.outboundValidated).toBe(0);
-    expect(result.summary.gateBreakdown.expected.inbound).toBe(8);
+    expect(result.summary.gateBreakdown.expected.inbound).toBe(11);
     expect(result.summary.gateBreakdown.actual.outbound).toBe(0);
     expect(table).toContain("expected_gate");
     expect(table).toContain("actual_gate");
@@ -85,7 +184,7 @@ describe("provguard bench", () => {
     const result = await runBench({ monitor: true });
 
     expect(result.monitor).toBe(true);
-    expect(result.scenarios.filter((scenario) => scenario.wouldBlock)).toHaveLength(8);
+    expect(result.scenarios.filter((scenario) => scenario.wouldBlock)).toHaveLength(9);
     expect(result.scenarios.every((scenario) => scenario.actual === "allow")).toBe(true);
   });
 
