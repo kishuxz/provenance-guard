@@ -3,7 +3,13 @@ import { readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 import process from "node:process";
 
-import type { Scenario, ScenarioExpectation } from "@provguard/harness";
+import type {
+  Scenario,
+  ScenarioDifficulty,
+  ScenarioExpectedGate,
+  ScenarioExpectation,
+  ScenarioProvenance,
+} from "@provguard/harness";
 import type {
   Chunk,
   ContextSlot,
@@ -17,6 +23,7 @@ import type {
 type Outcome = "allow" | "block";
 type GuardStage = "inbound" | "outbound" | "none";
 type BaselineOutcome = "catch" | "miss";
+type RateKind = "recall" | "false_positive";
 
 interface CheckInputChunk {
   id?: string;
@@ -69,6 +76,9 @@ interface Runtime {
 export interface BenchScenarioResult {
   id: string;
   provenance: Scenario["provenance"];
+  difficulty: ScenarioDifficulty;
+  expectedGate: ScenarioExpectedGate;
+  actualGate: GuardStage;
   expected: ScenarioExpectation;
   actual: Outcome;
   passed: boolean;
@@ -79,12 +89,28 @@ export interface BenchScenarioResult {
   wouldBlock: boolean;
 }
 
+export interface BenchRate {
+  kind: RateKind;
+  difficulty: ScenarioDifficulty;
+  provenance?: ScenarioProvenance;
+  numerator: number;
+  denominator: number;
+  percent: number | null;
+  label: string;
+}
+
+export interface BenchGateBreakdown {
+  expected: Record<ScenarioExpectedGate, number>;
+  actual: Record<GuardStage, number>;
+  expectedActual: Record<string, number>;
+  outboundValidated: number;
+}
+
 export interface BenchSummary {
-  rates: {
-    derived: string;
-    constructed: string;
-  };
-  falsePositives: number;
+  recall: Record<ScenarioDifficulty, Record<ScenarioProvenance, BenchRate>>;
+  falsePositiveRate: Record<ScenarioDifficulty, BenchRate>;
+  gateBreakdown: BenchGateBreakdown;
+  saturationWarnings: string[];
   stageBreakdown: Record<GuardStage, number>;
   reasonBreakdown: Partial<Record<ReasonCode, number>>;
   disabledBaselineCatches: number;
@@ -150,10 +176,13 @@ export async function runBench(options: { monitor?: boolean } = {}): Promise<Ben
 export function formatBenchTable(result: BenchResult): string {
   const headers = [
     "id",
+    "difficulty",
     "provenance",
     "expected",
     "actual",
     "pass",
+    "expected_gate",
+    "actual_gate",
     "reason",
     "stage",
     "guards_disabled",
@@ -161,10 +190,13 @@ export function formatBenchTable(result: BenchResult): string {
   ];
   const rows = result.scenarios.map((scenario) => [
     scenario.id,
+    scenario.difficulty,
     scenario.provenance,
     scenario.expected,
     scenario.actual,
     scenario.passed ? "pass" : "fail",
+    scenario.expectedGate,
+    scenario.actualGate,
     scenario.reasonCode ?? "-",
     scenario.stage,
     scenario.disabledBaseline,
@@ -173,13 +205,19 @@ export function formatBenchTable(result: BenchResult): string {
 
   const summaryRows = [
     "",
-    `derived catch rate: ${result.summary.rates.derived}`,
-    `constructed catch rate: ${result.summary.rates.constructed}`,
-    `false positives: ${result.summary.falsePositives}`,
+    "recall on block scenarios:",
+    ...formatRecallRows(result.summary.recall),
+    "false-positive rate on controls:",
+    ...formatFalsePositiveRows(result.summary.falsePositiveRate),
+    `outbound gate validations: ${result.summary.gateBreakdown.outboundValidated}`,
+    `expected gate breakdown: ${formatBreakdown(result.summary.gateBreakdown.expected)}`,
+    `actual gate breakdown: ${formatBreakdown(result.summary.gateBreakdown.actual)}`,
+    `expected->actual gate breakdown: ${formatBreakdown(result.summary.gateBreakdown.expectedActual)}`,
     `stage breakdown: ${formatBreakdown(result.summary.stageBreakdown)}`,
     `reason breakdown: ${formatBreakdown(result.summary.reasonBreakdown)}`,
     `disabled baseline catches: ${result.summary.disabledBaselineCatches}`,
     `shape-check baseline catches: ${result.summary.shapeBaselineCatches}`,
+    ...formatSaturationWarnings(result.summary.saturationWarnings),
   ];
 
   return [...formatRows([headers, ...rows]), ...summaryRows].join("\n");
@@ -227,6 +265,9 @@ function runBenchScenario(
   return {
     id: scenario.id,
     provenance: scenario.provenance,
+    difficulty: scenario.difficulty,
+    expectedGate: scenario.expectedGate,
+    actualGate: pipeline.stage,
     expected: scenario.expectation,
     actual,
     passed: pipeline.outcome === expectedOutcome,
@@ -240,9 +281,7 @@ function runBenchScenario(
 
 function summarizeBench(results: BenchScenarioResult[]): BenchSummary {
   const shouldBlock = results.filter((result) => result.expected === "should_block");
-  const falsePositives = results.filter(
-    (result) => result.expected === "should_allow" && result.wouldBlock,
-  ).length;
+  const controls = results.filter((result) => result.expected === "should_allow");
   const stageBreakdown: Record<GuardStage, number> = {
     inbound: 0,
     outbound: 0,
@@ -258,12 +297,15 @@ function summarizeBench(results: BenchScenarioResult[]): BenchSummary {
     }
   }
 
+  const recall = buildRecallRates(shouldBlock);
+  const falsePositiveRate = buildFalsePositiveRates(controls);
+  const gateBreakdown = buildGateBreakdown(results);
+
   return {
-    rates: {
-      derived: catchRate(shouldBlock.filter((result) => result.provenance === "derived")),
-      constructed: catchRate(shouldBlock.filter((result) => result.provenance === "constructed")),
-    },
-    falsePositives,
+    recall,
+    falsePositiveRate,
+    gateBreakdown,
+    saturationWarnings: saturationWarnings(recall, falsePositiveRate),
     stageBreakdown,
     reasonBreakdown,
     disabledBaselineCatches: 0,
@@ -271,11 +313,161 @@ function summarizeBench(results: BenchScenarioResult[]): BenchSummary {
   };
 }
 
-function catchRate(results: BenchScenarioResult[]): string {
-  const caught = results.filter((result) => result.wouldBlock).length;
-  const total = results.length;
-  const pct = total === 0 ? 0 : (caught / total) * 100;
-  return `${caught}/${total} (${pct.toFixed(1)}%)`;
+function buildRecallRates(
+  shouldBlock: BenchScenarioResult[],
+): Record<ScenarioDifficulty, Record<ScenarioProvenance, BenchRate>> {
+  return {
+    basic: {
+      derived: recallRate(
+        "basic",
+        "derived",
+        shouldBlock.filter(
+          (result) => result.difficulty === "basic" && result.provenance === "derived",
+        ),
+      ),
+      constructed: recallRate(
+        "basic",
+        "constructed",
+        shouldBlock.filter(
+          (result) => result.difficulty === "basic" && result.provenance === "constructed",
+        ),
+      ),
+    },
+    hard: {
+      derived: recallRate(
+        "hard",
+        "derived",
+        shouldBlock.filter(
+          (result) => result.difficulty === "hard" && result.provenance === "derived",
+        ),
+      ),
+      constructed: recallRate(
+        "hard",
+        "constructed",
+        shouldBlock.filter(
+          (result) => result.difficulty === "hard" && result.provenance === "constructed",
+        ),
+      ),
+    },
+  };
+}
+
+function buildFalsePositiveRates(
+  controls: BenchScenarioResult[],
+): Record<ScenarioDifficulty, BenchRate> {
+  return {
+    basic: falsePositiveRate(
+      "basic",
+      controls.filter((result) => result.difficulty === "basic"),
+    ),
+    hard: falsePositiveRate(
+      "hard",
+      controls.filter((result) => result.difficulty === "hard"),
+    ),
+  };
+}
+
+function buildGateBreakdown(results: BenchScenarioResult[]): BenchGateBreakdown {
+  const expected: Record<ScenarioExpectedGate, number> = {
+    inbound: 0,
+    outbound: 0,
+    either: 0,
+  };
+  const actual: Record<GuardStage, number> = {
+    inbound: 0,
+    outbound: 0,
+    none: 0,
+  };
+  const expectedActual: Record<string, number> = {};
+
+  for (const result of results) {
+    expected[result.expectedGate] += 1;
+    actual[result.actualGate] += 1;
+    const pair = `${result.expectedGate}->${result.actualGate}`;
+    expectedActual[pair] = (expectedActual[pair] ?? 0) + 1;
+  }
+
+  return {
+    expected,
+    actual,
+    expectedActual,
+    outboundValidated: results.filter(
+      (result) =>
+        result.expected === "should_block" &&
+        result.expectedGate === "outbound" &&
+        result.actualGate === "outbound",
+    ).length,
+  };
+}
+
+function recallRate(
+  difficulty: ScenarioDifficulty,
+  provenance: ScenarioProvenance,
+  results: BenchScenarioResult[],
+): BenchRate {
+  return makeRate({
+    kind: "recall",
+    difficulty,
+    provenance,
+    numerator: results.filter((result) => result.wouldBlock).length,
+    denominator: results.length,
+  });
+}
+
+function falsePositiveRate(
+  difficulty: ScenarioDifficulty,
+  results: BenchScenarioResult[],
+): BenchRate {
+  return makeRate({
+    kind: "false_positive",
+    difficulty,
+    numerator: results.filter((result) => result.wouldBlock).length,
+    denominator: results.length,
+  });
+}
+
+function makeRate(input: {
+  kind: RateKind;
+  difficulty: ScenarioDifficulty;
+  provenance?: ScenarioProvenance;
+  numerator: number;
+  denominator: number;
+}): BenchRate {
+  const percent = input.denominator === 0 ? null : (input.numerator / input.denominator) * 100;
+
+  return {
+    ...input,
+    percent,
+    label:
+      percent === null
+        ? "n/a (0 scenarios)"
+        : `${input.numerator}/${input.denominator} (${percent.toFixed(1)}%)`,
+  };
+}
+
+function saturationWarnings(
+  recall: BenchSummary["recall"],
+  falsePositiveRate: BenchSummary["falsePositiveRate"],
+): string[] {
+  const rates = [
+    recall.basic.derived,
+    recall.basic.constructed,
+    recall.hard.derived,
+    recall.hard.constructed,
+    falsePositiveRate.basic,
+    falsePositiveRate.hard,
+  ];
+
+  return rates
+    .filter((rate) => rate.percent === 100 && rate.denominator < 5)
+    .map((rate) => {
+      const provenance = rate.provenance === undefined ? "" : ` ${rate.provenance}`;
+      const label =
+        rate.kind === "recall"
+          ? `${rate.difficulty}${provenance} recall`
+          : `${rate.difficulty} false-positive rate`;
+      return `Saturation warning: ${label} is 100% with only ${rate.denominator} scenarios; this result detects regressions but does not measure adequacy.`;
+    });
 }
 
 function runPipeline(
@@ -418,7 +610,9 @@ async function runBenchCommand(flags: { monitor: boolean; json: boolean }): Prom
     await writeFile("bench-results.json", `${JSON.stringify(result, null, 2)}\n`);
   }
 
-  return result.scenarios.every((scenario) => scenario.passed) ? 0 : 1;
+  return result.scenarios.every((scenario) => scenario.difficulty === "hard" || scenario.passed)
+    ? 0
+    : 1;
 }
 
 function parseArgs(argv: string[]): {
@@ -469,6 +663,27 @@ function formatRows(rows: string[][]): string[] {
   );
 }
 
+function formatRecallRows(rates: BenchSummary["recall"]): string[] {
+  return [
+    `  basic derived: ${rates.basic.derived.label}`,
+    `  basic constructed: ${rates.basic.constructed.label}`,
+    `  hard derived: ${rates.hard.derived.label}`,
+    `  hard constructed: ${rates.hard.constructed.label}`,
+  ];
+}
+
+function formatFalsePositiveRows(rates: BenchSummary["falsePositiveRate"]): string[] {
+  return [`  basic: ${rates.basic.label}`, `  hard: ${rates.hard.label}`];
+}
+
+function formatSaturationWarnings(warnings: string[]): string[] {
+  if (warnings.length === 0) {
+    return [];
+  }
+
+  return ["", ...warnings];
+}
+
 function formatBreakdown<T extends string>(breakdown: Partial<Record<T, number>>): string {
   return Object.entries(breakdown)
     .filter(([, value]) => value !== 0)
@@ -477,6 +692,19 @@ function formatBreakdown<T extends string>(breakdown: Partial<Record<T, number>>
 }
 
 async function loadRuntime(): Promise<Runtime> {
+  if (process.env.VITEST_WORKER_ID !== undefined) {
+    const [inbound, harness, outbound] = await Promise.all([
+      import(/* @vite-ignore */ new URL("../../inbound/src/index.js", import.meta.url).href),
+      import(/* @vite-ignore */ new URL("../../harness/src/index.js", import.meta.url).href),
+      import(/* @vite-ignore */ new URL("../../outbound/src/index.js", import.meta.url).href),
+    ]);
+    return {
+      inbound: inbound as InboundRuntime,
+      harness: harness as HarnessRuntime,
+      outbound: outbound as OutboundRuntime,
+    };
+  }
+
   const [inbound, harness, outbound] = await Promise.all([
     importPackage("@provguard/inbound"),
     importPackage("@provguard/harness"),
