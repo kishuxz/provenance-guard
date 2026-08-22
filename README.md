@@ -167,3 +167,17 @@ pnpm exec provguard bench --json
 ```
 
 `pnpm exec provguard bench --json` exits `0`. It reports the hard-tier failures in its table rather than failing the process, because the bench measures the guards; it is not itself a pass/fail gate on the build. The regression gate is `pnpm test`, which pins the corpus and the reported rates.
+
+## Documentation
+
+| Document                                                         | What it is                                                          |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [docs/LIMITATIONS.md](docs/LIMITATIONS.md)                       | What the numbers do not mean. Read before citing any of them        |
+| [docs/PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md)                     | User-visible behavior, public interfaces, and release criteria      |
+| [docs/GRAPH_ENGINEERING_PLAN.md](docs/GRAPH_ENGINEERING_PLAN.md) | Graph model, invariants, traversals, and storage rollout            |
+| [docs/AUTONOMOUS_EXECUTION.md](docs/AUTONOMOUS_EXECUTION.md)     | Work graph, agent loop, lane boundaries, and gates                  |
+| [AGENTS.md](AGENTS.md)                                           | The engineering contract every contributor and coding agent follows |
+
+## License
+
+[Apache License 2.0](LICENSE). Copyright statement in [NOTICE](NOTICE).
