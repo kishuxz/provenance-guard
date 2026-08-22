@@ -18,6 +18,8 @@ export const GraphViolationCodes = [
   "GRAPH_SCHEMA_INVALID",
   /** An edge references a node ID that is not present in the graph. */
   "GRAPH_EDGE_ENDPOINT_MISSING",
+  /** A node attribute references a node ID that is not present in the graph. */
+  "GRAPH_REFERENCE_MISSING",
   /** The edge type does not permit this (fromKind, toKind) pair. */
   "GRAPH_EDGE_TYPE_NOT_PERMITTED",
   /** An edge crosses a tenant boundary, or a node's ID disagrees with its tenant. */

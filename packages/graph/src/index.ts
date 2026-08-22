@@ -49,6 +49,15 @@ export {
 } from "./nodes.js";
 
 export {
+  validateGraph,
+  type GraphInput,
+  type GraphViolation,
+  type ValidationReport,
+} from "./validate.js";
+
+export { baselineGraph, graphFixtures, type GraphFixture } from "./fixtures.js";
+
+export {
   ACYCLIC_EDGE_TYPES,
   EDGE_MATRIX,
   EdgeTypes,
