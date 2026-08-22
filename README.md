@@ -30,9 +30,11 @@ $ echo $?
 
 ## The two gates
 
-**Inbound — block channels that were never data sources.** Every chunk gets a channel and a credibility tier before context assembly. A diagnostic log, a system alert, an HTML error page, a truncated payload, an empty result, anything carrying a non-2xx upstream status: these are not retrieval results, and they do not belong in a slot that an agent will read as data. Unrecognized content is labelled `UNLABELED` at the lowest tier rather than given the benefit of the doubt. Slots declare which channels they accept and the minimum tier they require; anything else is denied, and the denial is recorded with a reason code.
+**Inbound — block channels that were never data sources.** Every chunk gets a channel and a credibility tier before context assembly. A diagnostic log, a system alert, an HTML error page, a truncated payload, an empty result, anything carrying a non-2xx upstream status: these are not retrieval results, and they do not belong in a slot that an agent will read as data. Unrecognized content is labelled `UNLABELED` at the lowest tier rather than given the benefit of the doubt. A declared label is treated as a claim, not as fact, so a payload that announces itself as `RETRIEVED_DOC` while carrying an error body is reclassified rather than trusted. Slots declare which channels they accept and the minimum tier they require; anything else is denied, and the denial is recorded with a reason code.
 
-**Outbound — refuse claims that don't trace to a tagged chunk.** The candidate output is split into claims, and each claim is matched against the chunks that were actually admitted. A claim supported only by a chunk that inbound rejected is not grounded. A claim supported by nothing at all is not grounded. Matching runs deterministically first — exact, then normalized, then entity and numeric overlap — and records which stage decided.
+**Outbound — refuse claims that don't trace to a tagged chunk.** The candidate output is split into claims, and each claim is matched against the chunks that were actually admitted. A claim supported only by a chunk that inbound rejected is not grounded. A claim supported by nothing at all is not grounded. Matching runs deterministically first — exact, then normalized, then entity and numeric overlap — and records which stage decided. A claim the deterministic ladder cannot decide is `CLAIM_UNVERIFIABLE` and blocks by default; it does not fall through to allow.
+
+**The judge is the last resort, and it cannot overrule the ladder.** `@provguard/judge` resolves only the claims the deterministic stages left explicitly uncertain. Its default implementation is a fixture judge: a claim and its chunk set are hashed into a stable key, and the answer is looked up in a checked-in fixture table. That keeps the whole pipeline offline and byte-reproducible — no network, no API key, no hosted model. A live judge can be supplied through the `liveJudge` hook, but it has to be passed in explicitly; there is no implicit fallback to a remote call, and a judge result is recorded with `method: "judge"` so a model-assisted decision is never mistaken for a deterministic one.
 
 ## What this is not
 
@@ -42,53 +44,85 @@ $ echo $?
 
 ## Bench
 
-Ten scenarios, eight expected to block and two clean controls expected to pass. Every scenario is fixed data with no network and no live model call, so runs are byte-identical.
+Twenty-two scenarios in two difficulty tiers: sixteen expected to block, six clean controls expected to pass. Every scenario is fixed data with no network and no live model call, so runs are byte-identical.
+
+The **basic** tier reproduces pollution that is visible in the shape of the payload — an error status, a truncated body, an empty result, a channel that was never a data source. The **hard** tier is the near-miss set: every payload is well formed, carries a data channel and a healthy tier, and reports success, and every fabricated output reuses the vocabulary of its context. There is nothing for signature detection to fire on. The hard tier exists to keep the bench from being saturated, and it is not saturated — **five of its eight block-scenarios currently fail.**
 
 ```
-id                       provenance   expected      actual  pass  reason                  stage    guards_disabled  shape_check
-stdout-capture           derived      should_block  block   pass  UPSTREAM_STATUS_NOT_OK  inbound  miss             miss
-http-error-body          constructed  should_block  block   pass  UPSTREAM_STATUS_NOT_OK  inbound  miss             miss
-alert-in-history         derived      should_block  block   pass  CHANNEL_NOT_PERMITTED   inbound  miss             miss
-truncated-json           derived      should_block  block   pass  PAYLOAD_TRUNCATED       inbound  miss             miss
-mechanical-fallback      derived      should_block  block   pass  TIER_BELOW_MINIMUM      inbound  miss             miss
-unlabeled-enrichment     derived      should_block  block   pass  CHANNEL_NOT_PERMITTED   inbound  miss             miss
-stale-cache              constructed  should_block  block   pass  CHANNEL_NOT_PERMITTED   inbound  miss             miss
-empty-not-denied         derived      should_block  block   pass  PAYLOAD_EMPTY           inbound  miss             miss
-clean-labeled-retrieval  constructed  should_allow  allow   pass  -                       none     miss             miss
-clean-authorized-empty   constructed  should_allow  allow   pass  -                       none     miss             miss
+id                               difficulty  provenance   expected      actual  pass  expected_gate  actual_gate  reason                     stage     guards_disabled  shape_check
+stdout-capture                   basic       derived      should_block  block   pass  inbound        inbound      UPSTREAM_STATUS_NOT_OK     inbound   miss             miss
+http-error-body                  basic       constructed  should_block  block   pass  inbound        inbound      UPSTREAM_STATUS_NOT_OK     inbound   miss             miss
+alert-in-history                 basic       derived      should_block  block   pass  inbound        inbound      CHANNEL_NOT_PERMITTED      inbound   miss             miss
+truncated-json                   basic       derived      should_block  block   pass  inbound        inbound      PAYLOAD_TRUNCATED          inbound   miss             miss
+mechanical-fallback              basic       derived      should_block  block   pass  inbound        inbound      TIER_BELOW_MINIMUM         inbound   miss             miss
+unlabeled-enrichment             basic       derived      should_block  block   pass  inbound        inbound      CHANNEL_NOT_PERMITTED      inbound   miss             miss
+stale-cache                      basic       constructed  should_block  block   pass  inbound        inbound      CHANNEL_NOT_PERMITTED      inbound   miss             miss
+empty-not-denied                 basic       derived      should_block  block   pass  inbound        inbound      PAYLOAD_EMPTY              inbound   miss             miss
+clean-labeled-retrieval          basic       constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
+clean-authorized-empty           basic       constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
+hard-paraphrased-fabrication     hard        constructed  should_block  allow   fail  outbound       none         -                          none      miss             miss
+hard-recombined-entities         hard        constructed  should_block  allow   fail  outbound       none         -                          none      miss             miss
+hard-split-conjunction           hard        constructed  should_block  block   pass  outbound       outbound     CLAIM_UNVERIFIABLE         outbound  miss             miss
+hard-unit-shift                  hard        constructed  should_block  allow   fail  outbound       none         -                          none      miss             miss
+hard-appended-qualifier          hard        constructed  should_block  allow   fail  outbound       none         -                          none      miss             miss
+hard-ok-status-error-body        hard        constructed  should_block  block   pass  inbound        inbound      PROVENANCE_LABEL_MISMATCH  inbound   miss             miss
+hard-fresh-timestamp-stale-body  hard        constructed  should_block  allow   fail  inbound        none         -                          none      miss             miss
+hard-json-shaped-diagnostic      hard        constructed  should_block  block   pass  inbound        inbound      RESULT_DEGRADED            inbound   miss             miss
+hard-clean-error-vocabulary      hard        constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
+hard-clean-t3-support            hard        constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
+hard-clean-entity-overlap        hard        constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
+hard-clean-authorized-empty      hard        constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
 
-derived catch rate: 6/6 (100.0%)
-constructed catch rate: 2/2 (100.0%)
-false positives: 0
-stage breakdown: inbound=8
-reason breakdown: UPSTREAM_STATUS_NOT_OK=2, CHANNEL_NOT_PERMITTED=3, PAYLOAD_TRUNCATED=1, TIER_BELOW_MINIMUM=1, PAYLOAD_EMPTY=1
+recall on block scenarios:
+  basic derived: 6/6 (100.0%)
+  basic constructed: 2/2 (100.0%)
+  hard derived: n/a (0 scenarios)
+  hard constructed: 3/8 (37.5%)
+false-positive rate on controls:
+  basic: 0/2 (0.0%)
+  hard: 0/4 (0.0%)
+outbound gate validations: 1
+expected gate breakdown: inbound=11, outbound=5, either=6
+actual gate breakdown: inbound=10, outbound=1, none=11
+expected->actual gate breakdown: inbound->inbound=10, either->none=6, outbound->none=4, outbound->outbound=1, inbound->none=1
+stage breakdown: inbound=10, outbound=1
+reason breakdown: UPSTREAM_STATUS_NOT_OK=2, CHANNEL_NOT_PERMITTED=3, PAYLOAD_TRUNCATED=1, TIER_BELOW_MINIMUM=1, PAYLOAD_EMPTY=1, CLAIM_UNVERIFIABLE=1, PROVENANCE_LABEL_MISMATCH=1, RESULT_DEGRADED=1
 disabled baseline catches: 0
 shape-check baseline catches: 0
+
+Saturation warning: basic constructed recall is 100% with only 2 scenarios; this result detects regressions but does not measure adequacy.
 ```
 
-**The two rates are reported separately and are not combined.** The six derived scenarios reproduce mechanisms documented in arXiv:2606.14589; the two constructed block-scenarios were invented by the same author who wrote the guards. Only the derived rate carries any evidence about real-world failures, and even that is a measurement on a fixed ten-scenario set, not an accuracy claim. See [docs/LIMITATIONS.md](docs/LIMITATIONS.md).
+**The rates are reported separately and are never combined.** `derived` scenarios reproduce mechanisms documented in arXiv:2606.14589; `constructed` scenarios were invented by the same author who wrote the guards that catch them. Only the derived rate carries any evidence about real-world failures, and even that is a measurement on a fixed set, not an accuracy claim. All eight hard-tier block scenarios are constructed, so the 3/8 is a self-assessment of known weaknesses, not a coverage measurement. See [docs/LIMITATIONS.md](docs/LIMITATIONS.md).
 
-Three things in that table are worth reading carefully:
+Five things in that table are worth reading carefully:
 
-- **Both baselines catch zero.** With the guards disabled, nothing is caught, which is the point — this is what the pipeline does today. The shape-check baseline is what a normal test suite checks: output is non-empty and JSON parses. It also catches zero of the eight. Every polluted output above is a non-empty, well-formed string. Shape tells you nothing about provenance.
-- **All eight were caught inbound, and outbound caught zero of them.** That is not evidence that the outbound gate is unnecessary; it means inbound blocked these chunks first, so outbound never saw an ungrounded claim to reject. This scenario set does not exercise the outbound gate as an independent catcher. The `check` example above, run as a single chunk, shows both gates firing.
-- **Zero false positives on two controls** is two data points. It is not a false-positive rate.
+- **Five hard scenarios fail, and they are the interesting rows.** `hard-paraphrased-fabrication`, `hard-recombined-entities`, `hard-unit-shift`, and `hard-appended-qualifier` all defeat the outbound gate the same way: every entity and number in the fabricated claim really does appear in context, so a check that asks _whether the pieces are present_ is satisfied by an assertion that inverts, re-periodizes, or extends what context actually says. Grounding by overlap cannot see relational meaning. `hard-fresh-timestamp-stale-body` defeats the inbound gate because nothing currently checks whether a document's content is as fresh as its `retrievedAt`. These are recorded gaps, not pending fixes hidden behind a green table.
+- **Both baselines catch zero, on all twenty-two.** With the guards disabled, nothing is caught, which is what the pipeline does today. The shape-check baseline is what a normal test suite checks: output is non-empty and JSON parses. It also catches zero of the sixteen. Every polluted output above is a non-empty, well-formed string. Shape tells you nothing about provenance.
+- **`expected_gate` vs `actual_gate` is the honest column.** Every scenario declares which gate _should_ have caught it. Ten of eleven inbound-expected scenarios were caught inbound; one of five outbound-expected scenarios was caught outbound. The outbound gate is under-exercised as an independent catcher, and the table says so rather than absorbing the result into a single rate.
+- **Zero false positives on six controls** is six data points. It is not a false-positive rate. Four of those controls are deliberately adversarial — clean text about error handling, clean text with heavy entity overlap — because over-blocking legitimate diagnostic-sounding content is this design's most likely real failure.
+- **The saturation warning is emitted by the bench itself**, not written into this README by hand. When a tier reaches 100% on a small denominator, the report says the number detects regressions and does not measure adequacy.
 
 ## Quickstart
 
 Requires Node 20+ and pnpm 10.
 
 ```bash
-# install
+# install and compile every package in dependency order
 pnpm install
+pnpm build
 
-# build (no root build script yet; this compiles every package in dependency order)
-pnpm -r exec tsc -p tsconfig.json
+# run the bench; --json additionally writes bench-results.json
+pnpm exec provguard bench
+pnpm exec provguard bench --json
 
-# run the bench; --json also writes bench-results.json
-node packages/cli/dist/cli/src/index.js bench --json
+# run the narrated D1 walkthrough, guards off then guards on
+pnpm --filter @provguard/demo demo
+```
 
-# run the demo: the D1 chain from above
+To run the D1 chain through `check` yourself:
+
+```bash
 cat > polluted.json <<'EOF'
 {
   "slot": "signals",
@@ -102,17 +136,33 @@ cat > polluted.json <<'EOF'
   "output": "Battery suppliers are shifting from raw growth messaging toward compliance-led forecasting, framing the sector around regulatory readiness rather than pure expansion."
 }
 EOF
-node packages/cli/dist/cli/src/index.js check polluted.json
+pnpm exec provguard check polluted.json
 ```
 
 `check` exits `1` when it blocks, so it can gate a pipeline. Add `--monitor` to either command to record what _would_ have been blocked without actually blocking it.
 
 ## Packages
 
-| Package               | Role                                                                      |
-| --------------------- | ------------------------------------------------------------------------- |
-| `@provguard/schema`   | Shared types: `Chunk`, `Provenance`, `Verdict`, `ReasonCode`, slot policy |
-| `@provguard/inbound`  | Chunk classification and slot admission                                   |
-| `@provguard/outbound` | Claim extraction and grounding                                            |
-| `@provguard/harness`  | The ten deterministic scenarios                                           |
-| `@provguard/cli`      | `provguard check` and `provguard bench`                                   |
+| Package               | Role                                                                       |
+| --------------------- | -------------------------------------------------------------------------- |
+| `@provguard/schema`   | Shared types: `Chunk`, `Provenance`, `Verdict`, `ReasonCode`, slot policy  |
+| `@provguard/inbound`  | Chunk classification and slot admission                                    |
+| `@provguard/outbound` | Claim extraction, deterministic grounding ladder, and audit records        |
+| `@provguard/judge`    | Offline fixture judge for claims the deterministic ladder leaves uncertain |
+| `@provguard/harness`  | The twenty-two deterministic scenarios and their difficulty metadata       |
+| `@provguard/cli`      | `provguard check` and `provguard bench`                                    |
+| `@provguard/demo`     | Narrated stdout walkthrough of the D1 chain, guards off then on            |
+
+## Verification
+
+```bash
+pnpm install --frozen-lockfile
+pnpm build
+pnpm typecheck
+pnpm lint
+pnpm format
+pnpm test
+pnpm exec provguard bench --json
+```
+
+`pnpm exec provguard bench --json` exits `0`. It reports the hard-tier failures in its table rather than failing the process, because the bench measures the guards; it is not itself a pass/fail gate on the build. The regression gate is `pnpm test`, which pins the corpus and the reported rates.

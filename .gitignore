@@ -2,3 +2,11 @@ node_modules/
 dist/
 coverage/
 .DS_Store
+
+# Written by `provguard bench --json`, which the quickstart tells you to run.
+bench-results.json
+
+# Agent-tool scratch space. Conductor nests sibling worktrees and attachments
+# here, which otherwise land in the eslint and prettier globs and fail the
+# verification gate on files that are not part of this repository.
+.context/
