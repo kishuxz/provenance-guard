@@ -149,6 +149,7 @@ pnpm exec provguard check polluted.json
 | `@provguard/inbound`  | Chunk classification and slot admission                                    |
 | `@provguard/outbound` | Claim extraction, deterministic grounding ladder, and audit records        |
 | `@provguard/judge`    | Offline fixture judge for claims the deterministic ladder leaves uncertain |
+| `@provguard/graph`    | Typed lineage graph: node and edge model, deterministic IDs, edge matrix   |
 | `@provguard/harness`  | The twenty-two deterministic scenarios and their difficulty metadata       |
 | `@provguard/cli`      | `provguard check` and `provguard bench`                                    |
 | `@provguard/demo`     | Narrated stdout walkthrough of the D1 chain, guards off then on            |
