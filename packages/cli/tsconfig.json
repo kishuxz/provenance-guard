@@ -3,6 +3,7 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
+      "@provguard/graph": ["../graph/src/index.ts"],
       "@provguard/harness": ["../harness/src/index.ts"],
       "@provguard/inbound": ["../inbound/src/index.ts"],
       "@provguard/outbound": ["../outbound/src/index.ts"],

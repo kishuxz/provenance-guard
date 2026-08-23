@@ -180,8 +180,13 @@ export function buildGraph(audit: RunAudit): GraphInput {
     nodes.push(chunk);
     chunkIdByAuditId.set(entry.chunk.id, chunk.id);
 
+    // PRODUCED only. Also emitting DERIVED_FROM artifact -> source would state
+    // the same relationship twice in opposite directions, and backward
+    // traversal would then return two paths that differ by nothing a reader
+    // can see. The edge matrix still permits Artifact -> Source derivation for
+    // the case where an artifact descends from a source that did not produce
+    // it; this builder simply has no such case.
     edge("PRODUCED", source.id, artifact.id);
-    edge("DERIVED_FROM", artifact.id, source.id);
     edge("PRODUCED", retrieveStep.id, artifact.id);
     edge("SPLIT_INTO", artifact.id, chunk.id);
     edge("EVALUATED_BY", chunk.id, policy.id);

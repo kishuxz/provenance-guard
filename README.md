@@ -141,6 +141,47 @@ pnpm exec provguard check polluted.json
 
 `check` exits `1` when it blocks, so it can gate a pipeline. Add `--monitor` to either command to record what _would_ have been blocked without actually blocking it.
 
+## Lineage
+
+Every check can emit the lineage graph for the run it just performed, and four commands read it back.
+
+```bash
+# emit the graph alongside the check
+pnpm exec provguard check polluted.json --graph graph.json
+
+# what did this claim rest on?
+pnpm exec provguard trace graph.json <claim-id>
+
+# why was it decided that way, and under which policy version?
+pnpm exec provguard explain graph.json <claim-id>
+
+# this source turned out to be bad — what depends on it?
+pnpm exec provguard impact graph.json <source-id>
+
+# is the ledger itself well formed? exits 1 if not
+pnpm exec provguard graph validate graph.json
+```
+
+A trace names the relationship at each hop, so a path is readable without a second lookup:
+
+```console
+$ provguard trace graph.json pg:local:Claim:ce772f55...
+paths: 2
+  path 1:
+    Claim pg:local:Claim:ce772f55...
+      -[SUPPORTED_BY]-> Chunk RETRIEVED_DOC/T3 admitted pg:local:Chunk:9e422a35...
+      -[SPLIT_INTO]-> Artifact sha256:66b0a2e3...
+      -[PRODUCED]-> Source https://vendor.test/10k
+```
+
+Three things about this are deliberate:
+
+- **A path is evidence structure, not proof.** The graph records that a claim was _offered_ a chunk as support. It does not record that the claim is true, and connectivity must not be read as truth.
+- **`explain` returns recorded facts, never generated prose.** It reports the verdict, the exact immutable policy version, the reason codes, whether a deterministic check or a judge decided, and whether the policy was enforcing. It does not write you a sentence about what happened — a sentence assembled here would be indistinguishable downstream from a model-written one.
+- **Exports redact raw text by default.** The graph carries the material the guard was protecting; `--unredacted` is required to include it. Node IDs are derived from non-redacted fields, so a redacted export still passes `graph validate`.
+
+Node and edge IDs are deterministic: the same input produces the same graph on any machine, and re-checking a file converges on the same `Run` rather than accumulating one per invocation. `observedAt` defaults to the wall clock because it genuinely means "when this entered the ledger"; pass `--observed-at` to pin it for byte-reproducible output.
+
 ## Packages
 
 | Package               | Role                                                                       |
@@ -151,7 +192,7 @@ pnpm exec provguard check polluted.json
 | `@provguard/judge`    | Offline fixture judge for claims the deterministic ladder leaves uncertain |
 | `@provguard/graph`    | Typed lineage graph: node and edge model, deterministic IDs, edge matrix   |
 | `@provguard/harness`  | The twenty-two deterministic scenarios and their difficulty metadata       |
-| `@provguard/cli`      | `provguard check` and `provguard bench`                                    |
+| `@provguard/cli`      | `check`, `bench`, `trace`, `explain`, `impact`, `graph validate`           |
 | `@provguard/demo`     | Narrated stdout walkthrough of the D1 chain, guards off then on            |
 
 ## Verification

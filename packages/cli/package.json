@@ -19,6 +19,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@provguard/graph": "workspace:*",
     "@provguard/harness": "workspace:*",
     "@provguard/inbound": "workspace:*",
     "@provguard/outbound": "workspace:*",

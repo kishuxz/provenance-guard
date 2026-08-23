@@ -12,13 +12,24 @@ import type {
 } from "@provguard/harness";
 import type {
   Chunk,
+  Claim,
   ContextSlot,
+  Grounding,
   Provenance,
   Reason,
   ReasonCode,
   SlotPolicy,
   Verdict,
 } from "@provguard/schema";
+
+import {
+  auditFromPipeline,
+  formatExplain,
+  formatImpact,
+  formatTrace,
+  formatValidation,
+  type GraphRuntime,
+} from "./graph.js";
 
 type Outcome = "allow" | "block";
 type GuardStage = "inbound" | "outbound" | "none";
@@ -51,6 +62,11 @@ interface PipelineResult {
   deliveredChunks: Chunk[];
   inboundVerdicts: Array<{ chunkId: string; verdict: Verdict }>;
   outboundVerdict: Verdict;
+  /** Per-claim grounding results, carried so the lineage graph can record them. */
+  groundings: Grounding[];
+  claims: Claim[];
+  output: string;
+  slotName: string;
 }
 
 interface InboundRuntime {
@@ -64,7 +80,10 @@ interface HarnessRuntime {
 }
 
 interface OutboundRuntime {
-  auditOutput(output: string, chunks: Chunk[]): { verdict: Verdict };
+  auditOutput(
+    output: string,
+    chunks: Chunk[],
+  ): { verdict: Verdict; groundings: Grounding[]; assessments: { claim: Claim }[] };
 }
 
 interface Runtime {
@@ -126,15 +145,25 @@ export interface BenchResult {
 const DEFAULT_SLOT_NAME = "signals";
 
 export async function main(argv = process.argv.slice(2)): Promise<number> {
-  const { command, args, flags } = parseArgs(argv);
-
   try {
+    // Inside the try: argument parsing can reject a malformed flag, and a CLI
+    // that throws a stack trace at the user for a typo is a broken CLI.
+    const { command, args, flags } = parseArgs(argv);
+
     if (command === "check") {
       return await runCheckCommand(args, flags);
     }
 
     if (command === "bench") {
       return await runBenchCommand(flags);
+    }
+
+    if (command === "trace" || command === "explain" || command === "impact") {
+      return await runTraversalCommand(command, args, flags);
+    }
+
+    if (command === "graph") {
+      return await runGraphCommand(args, flags);
     }
 
     printUsage();
@@ -510,6 +539,10 @@ function runPipeline(
     deliveredChunks,
     inboundVerdicts,
     outboundVerdict: outbound.verdict,
+    groundings: outbound.groundings,
+    claims: outbound.assessments.map((assessment) => assessment.claim),
+    output,
+    slotName: options.slotName,
   };
 }
 
@@ -584,22 +617,124 @@ function shapeCheckCatches(output: string): boolean {
   }
 }
 
-async function runCheckCommand(
-  args: string[],
-  flags: { monitor: boolean; json: boolean },
-): Promise<number> {
+async function runCheckCommand(args: string[], flags: CliFlags): Promise<number> {
   const file = args[0];
   if (file === undefined) {
     throw new Error("check requires <file.json>.");
   }
 
   const result = await runCheckFile(file, { monitor: flags.monitor });
+
+  if (flags.graphPath !== null) {
+    await writeGraphForRun(result, flags);
+  }
+
   if (flags.json) {
     console.log(JSON.stringify(result, null, 2));
   } else {
     console.log(formatCheckResult(result));
   }
   return result.wouldBlock && !flags.monitor ? 1 : 0;
+}
+
+/**
+ * Writes the lineage graph for a completed check.
+ *
+ * Redacted by default. The graph carries the raw chunk and output text, which
+ * is the material the guard was protecting; an export is exactly where it would
+ * escape, so including it has to be asked for.
+ */
+async function writeGraphForRun(result: PipelineResult, flags: CliFlags): Promise<void> {
+  const graphRuntime = await loadGraphRuntime();
+  const observedAt = flags.observedAt ?? new Date().toISOString();
+
+  const audit = auditFromPipeline(
+    graphRuntime,
+    {
+      classifiedChunks: result.classifiedChunks,
+      deliveredChunks: result.deliveredChunks,
+      inboundVerdicts: result.inboundVerdicts,
+      outboundVerdict: result.outboundVerdict,
+      groundings: result.groundings,
+      claims: result.claims,
+      output: result.output,
+      // In monitor mode the output is delivered even when it would have been
+      // blocked, which is the distinction the ledger has to preserve.
+      delivered: flags.monitor || !result.wouldBlock,
+      monitor: flags.monitor,
+      slotName: result.slotName,
+    },
+    {
+      tenantId: flags.tenant,
+      observedAt,
+      policyVersion: "1",
+    },
+  );
+
+  const graph = graphRuntime.buildGraph(audit);
+  await writeFile(
+    flags.graphPath as string,
+    `${graphRuntime.toCanonicalJSON(graph, { redact: !flags.unredacted })}\n`,
+  );
+}
+
+/**
+ * `trace`, `explain` and `impact` are read-only reporting. They exit 0 even
+ * when they find nothing: "this claim rests on no evidence" is an answer, not
+ * a command failure, and exiting non-zero would make it indistinguishable from
+ * an unreadable file in a shell pipeline.
+ */
+async function runTraversalCommand(
+  command: "trace" | "explain" | "impact",
+  args: string[],
+  flags: CliFlags,
+): Promise<number> {
+  const [graphPath, nodeId] = args;
+  if (graphPath === undefined || nodeId === undefined) {
+    throw new Error(`${command} requires <graph.json> <node-id>.`);
+  }
+
+  const graphRuntime = await loadGraphRuntime();
+  const graph = graphRuntime.fromCanonicalJSON(await readFile(graphPath, "utf8"));
+  const store = new graphRuntime.MemoryGraphStore(graph);
+
+  if (command === "trace") {
+    const result = graphRuntime.trace(store, flags.tenant, nodeId);
+    console.log(flags.json ? JSON.stringify(result, null, 2) : formatTrace(store, result));
+    return 0;
+  }
+
+  if (command === "explain") {
+    const result = graphRuntime.explain(store, flags.tenant, nodeId);
+    console.log(flags.json ? JSON.stringify(result, null, 2) : formatExplain(store, result));
+    return 0;
+  }
+
+  const result = graphRuntime.impact(store, flags.tenant, nodeId);
+  console.log(flags.json ? JSON.stringify(result, null, 2) : formatImpact(result));
+  return 0;
+}
+
+/**
+ * `graph validate` exits 1 when the graph has violations, so it can gate CI in
+ * the same way `check` does.
+ */
+async function runGraphCommand(args: string[], flags: CliFlags): Promise<number> {
+  const [subcommand, graphPath] = args;
+  if (subcommand !== "validate") {
+    throw new Error("graph supports one subcommand: validate.");
+  }
+
+  if (graphPath === undefined) {
+    throw new Error("graph validate requires <graph.json>.");
+  }
+
+  const graphRuntime = await loadGraphRuntime();
+  const graph = graphRuntime.fromCanonicalJSON(await readFile(graphPath, "utf8"));
+  const report = graphRuntime.validateGraph(graph);
+
+  console.log(flags.json ? JSON.stringify(report, null, 2) : formatValidation(report));
+  return report.valid ? 0 : 1;
 }
 
 async function runBenchCommand(flags: { monitor: boolean; json: boolean }): Promise<number> {
@@ -615,22 +750,55 @@ async function runBenchCommand(flags: { monitor: boolean; json: boolean }): Prom
     : 1;
 }
 
+interface CliFlags {
+  monitor: boolean;
+  json: boolean;
+  tenant: string;
+  graphPath: string | null;
+  unredacted: boolean;
+  /**
+   * Pins the ledger observation time. IDs never depend on it, so this only
+   * affects the recorded `observedAt` — but pinning it makes `--json` output
+   * byte-reproducible, which is what a CI diff needs.
+   */
+  observedAt: string | null;
+}
+
+const DEFAULT_TENANT = "local";
+
 function parseArgs(argv: string[]): {
   command: string | undefined;
   args: string[];
-  flags: { monitor: boolean; json: boolean };
+  flags: CliFlags;
 } {
-  const flags = {
+  const flags: CliFlags = {
     monitor: false,
     json: false,
+    tenant: DEFAULT_TENANT,
+    graphPath: null,
+    unredacted: false,
+    observedAt: null,
   };
   const positional: string[] = [];
 
-  for (const arg of argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index] as string;
+
     if (arg === "--monitor") {
       flags.monitor = true;
     } else if (arg === "--json") {
       flags.json = true;
+    } else if (arg === "--unredacted") {
+      flags.unredacted = true;
+    } else if (arg === "--tenant" || arg === "--graph" || arg === "--observed-at") {
+      const value = argv[index + 1];
+      if (value === undefined || value.startsWith("--")) {
+        throw new Error(`${arg} requires a value.`);
+      }
+      index += 1;
+      if (arg === "--tenant") flags.tenant = value;
+      else if (arg === "--graph") flags.graphPath = value;
+      else flags.observedAt = value;
     } else {
       positional.push(arg);
     }
@@ -645,8 +813,17 @@ function parseArgs(argv: string[]): {
 
 function printUsage(): void {
   console.error(`Usage:
-  provguard check <file.json> [--monitor] [--json]
-  provguard bench [--monitor] [--json]`);
+  provguard check <file.json> [--monitor] [--json] [--graph <out.json>] [--unredacted]
+  provguard bench [--monitor] [--json]
+  provguard trace <graph.json> <node-id> [--json] [--tenant <id>]
+  provguard explain <graph.json> <node-id> [--json] [--tenant <id>]
+  provguard impact <graph.json> <node-id> [--json] [--tenant <id>]
+  provguard graph validate <graph.json> [--json]
+
+Common flags:
+  --tenant <id>        tenant to read (default: ${DEFAULT_TENANT})
+  --observed-at <iso>  pin the ledger observation time for reproducible output
+  --unredacted         include raw chunk, claim and output text in an exported graph`);
 }
 
 function formatRows(rows: string[][]): string[] {
@@ -719,6 +896,20 @@ async function loadRuntime(): Promise<Runtime> {
 
 async function importPackage(specifier: string): Promise<unknown> {
   return import(/* @vite-ignore */ specifier);
+}
+
+/**
+ * Loads `@provguard/graph` the same way the guards are loaded, so one build
+ * works both from `src` under vitest and from `dist` as an installed binary.
+ */
+async function loadGraphRuntime(): Promise<GraphRuntime> {
+  if (process.env.VITEST_WORKER_ID !== undefined) {
+    return (await import(
+      /* @vite-ignore */ new URL("../../graph/src/index.js", import.meta.url).href
+    )) as GraphRuntime;
+  }
+
+  return (await importPackage("@provguard/graph")) as GraphRuntime;
 }
 
 if (

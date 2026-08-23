@@ -35,6 +35,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@provguard/graph':
+        specifier: workspace:*
+        version: link:../graph
       '@provguard/harness':
         specifier: workspace:*
         version: link:../harness
