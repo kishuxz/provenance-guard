@@ -32,6 +32,7 @@ export {
   VerdictNodeSchema,
   createNode,
   expectedNodeId,
+  stripCredentials,
   identityFields,
   runOf,
   type ArtifactNode,
@@ -64,6 +65,17 @@ export {
 } from "./validate.js";
 
 export { baselineGraph, graphFixtures, type GraphFixture } from "./fixtures.js";
+
+export {
+  REDACTED,
+  fromCanonicalJSON,
+  fromJSONL,
+  toCanonicalJSON,
+  toJSONL,
+  type SerializeOptions,
+} from "./serialize.js";
+
+export { MemoryGraphStore } from "./store.js";
 
 export {
   ACYCLIC_EDGE_TYPES,
