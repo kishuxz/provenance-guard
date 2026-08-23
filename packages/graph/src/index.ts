@@ -78,6 +78,14 @@ export {
 export { MemoryGraphStore } from "./store.js";
 
 export {
+  FORWARD_STEPS,
+  impact,
+  type AffectedNode,
+  type ImpactOptions,
+  type ImpactResult,
+} from "./impact.js";
+
+export {
   BACKWARD_STEPS,
   explain,
   trace,
