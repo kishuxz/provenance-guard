@@ -51,35 +51,35 @@ The **basic** tier reproduces pollution that is visible in the shape of the payl
 Neither the hard nor the mixed tier is saturated: **five of the hard tier's eight block-scenarios fail, and two of the mixed tier's four.** Those failures are the most useful thing in the table.
 
 ```
-id                                  difficulty  provenance   expected      actual  pass  expected_gate  actual_gate  reason                     stage     guards_disabled  shape_check
-stdout-capture                      basic       derived      should_block  block   pass  inbound        inbound      UPSTREAM_STATUS_NOT_OK     inbound   miss             miss
-http-error-body                     basic       constructed  should_block  block   pass  inbound        inbound      UPSTREAM_STATUS_NOT_OK     inbound   miss             miss
-alert-in-history                    basic       derived      should_block  block   pass  inbound        inbound      CHANNEL_NOT_PERMITTED      inbound   miss             miss
-truncated-json                      basic       derived      should_block  block   pass  inbound        inbound      PAYLOAD_TRUNCATED          inbound   miss             miss
-mechanical-fallback                 basic       derived      should_block  block   pass  inbound        inbound      TIER_BELOW_MINIMUM         inbound   miss             miss
-unlabeled-enrichment                basic       derived      should_block  block   pass  inbound        inbound      CHANNEL_NOT_PERMITTED      inbound   miss             miss
-stale-cache                         basic       constructed  should_block  block   pass  inbound        inbound      CHANNEL_NOT_PERMITTED      inbound   miss             miss
-empty-not-denied                    basic       derived      should_block  block   pass  inbound        inbound      PAYLOAD_EMPTY              inbound   miss             miss
-clean-labeled-retrieval             basic       constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
-clean-authorized-empty              basic       constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
-hard-paraphrased-fabrication        hard        constructed  should_block  allow   fail  outbound       none         -                          none      miss             miss
-hard-recombined-entities            hard        constructed  should_block  allow   fail  outbound       none         -                          none      miss             miss
-hard-split-conjunction              hard        constructed  should_block  block   pass  outbound       outbound     CLAIM_UNVERIFIABLE         outbound  miss             miss
-hard-unit-shift                     hard        constructed  should_block  allow   fail  outbound       none         -                          none      miss             miss
-hard-appended-qualifier             hard        constructed  should_block  allow   fail  outbound       none         -                          none      miss             miss
-hard-ok-status-error-body           hard        constructed  should_block  block   pass  inbound        inbound      PROVENANCE_LABEL_MISMATCH  inbound   miss             miss
-hard-fresh-timestamp-stale-body     hard        constructed  should_block  allow   fail  inbound        none         -                          none      miss             miss
-hard-json-shaped-diagnostic         hard        constructed  should_block  block   pass  inbound        inbound      RESULT_DEGRADED            inbound   miss             miss
-hard-clean-error-vocabulary         hard        constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
-hard-clean-t3-support               hard        constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
-hard-clean-entity-overlap           hard        constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
-hard-clean-authorized-empty         hard        constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
-mixed-error-appended-to-document    mixed       constructed  should_block  allow   fail  either         none         -                          none      miss             miss
-mixed-truncated-tail                mixed       constructed  should_block  block   pass  either         inbound      PAYLOAD_TRUNCATED          inbound   miss             miss
-mixed-diagnostic-interleaved        mixed       constructed  should_block  block   pass  either         inbound      PROVENANCE_LABEL_MISMATCH  inbound   miss             miss
-mixed-cross-sentence-both-grounded  mixed       constructed  should_block  allow   fail  outbound       none         -                          none      miss             miss
-mixed-clean-quoted-error            mixed       constructed  should_allow  block   fail  either         outbound     CLAIM_UNGROUNDED           outbound  miss             miss
-mixed-clean-multi-record            mixed       constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
+id                                  difficulty  provenance   expected      actual  pass  expected_gate  actual_gate  reason                     stage     guard_effect  shape_check
+stdout-capture                      basic       derived      should_block  block   pass  inbound        inbound      UPSTREAM_STATUS_NOT_OK     inbound   changed       miss
+http-error-body                     basic       constructed  should_block  block   pass  inbound        inbound      UPSTREAM_STATUS_NOT_OK     inbound   changed       miss
+alert-in-history                    basic       derived      should_block  block   pass  inbound        inbound      CHANNEL_NOT_PERMITTED      inbound   changed       miss
+truncated-json                      basic       derived      should_block  block   pass  inbound        inbound      PAYLOAD_TRUNCATED          inbound   changed       miss
+mechanical-fallback                 basic       derived      should_block  block   pass  inbound        inbound      TIER_BELOW_MINIMUM         inbound   changed       miss
+unlabeled-enrichment                basic       derived      should_block  block   pass  inbound        inbound      CHANNEL_NOT_PERMITTED      inbound   changed       miss
+stale-cache                         basic       constructed  should_block  block   pass  inbound        inbound      CHANNEL_NOT_PERMITTED      inbound   changed       miss
+empty-not-denied                    basic       derived      should_block  block   pass  inbound        inbound      PAYLOAD_EMPTY              inbound   changed       miss
+clean-labeled-retrieval             basic       constructed  should_allow  allow   pass  either         none         -                          none      none          miss
+clean-authorized-empty              basic       constructed  should_allow  allow   pass  either         none         -                          none      none          miss
+hard-paraphrased-fabrication        hard        constructed  should_block  allow   fail  outbound       none         -                          none      none          miss
+hard-recombined-entities            hard        constructed  should_block  allow   fail  outbound       none         -                          none      none          miss
+hard-split-conjunction              hard        constructed  should_block  block   pass  outbound       outbound     CLAIM_UNVERIFIABLE         outbound  changed       miss
+hard-unit-shift                     hard        constructed  should_block  allow   fail  outbound       none         -                          none      none          miss
+hard-appended-qualifier             hard        constructed  should_block  allow   fail  outbound       none         -                          none      none          miss
+hard-ok-status-error-body           hard        constructed  should_block  block   pass  inbound        inbound      PROVENANCE_LABEL_MISMATCH  inbound   changed       miss
+hard-fresh-timestamp-stale-body     hard        constructed  should_block  allow   fail  inbound        none         -                          none      none          miss
+hard-json-shaped-diagnostic         hard        constructed  should_block  block   pass  inbound        inbound      RESULT_DEGRADED            inbound   changed       miss
+hard-clean-error-vocabulary         hard        constructed  should_allow  allow   pass  either         none         -                          none      none          miss
+hard-clean-t3-support               hard        constructed  should_allow  allow   pass  either         none         -                          none      none          miss
+hard-clean-entity-overlap           hard        constructed  should_allow  allow   pass  either         none         -                          none      none          miss
+hard-clean-authorized-empty         hard        constructed  should_allow  allow   pass  either         none         -                          none      none          miss
+mixed-error-appended-to-document    mixed       constructed  should_block  allow   fail  either         none         -                          none      none          miss
+mixed-truncated-tail                mixed       constructed  should_block  block   pass  either         inbound      PAYLOAD_TRUNCATED          inbound   changed       miss
+mixed-diagnostic-interleaved        mixed       constructed  should_block  block   pass  either         inbound      PROVENANCE_LABEL_MISMATCH  inbound   changed       miss
+mixed-cross-sentence-both-grounded  mixed       constructed  should_block  allow   fail  outbound       none         -                          none      none          miss
+mixed-clean-quoted-error            mixed       constructed  should_allow  block   fail  either         outbound     CLAIM_UNGROUNDED           outbound  changed       miss
+mixed-clean-multi-record            mixed       constructed  should_allow  allow   pass  either         none         -                          none      none          miss
 
 recall on block scenarios:
   basic derived: 6/6 (100.0%)
@@ -98,8 +98,10 @@ actual gate breakdown: inbound=12, outbound=2, none=14
 expected->actual gate breakdown: inbound->inbound=10, either->none=8, outbound->none=5, outbound->outbound=1, inbound->none=1, either->inbound=2, either->outbound=1
 stage breakdown: inbound=12, outbound=2
 reason breakdown: UPSTREAM_STATUS_NOT_OK=2, CHANNEL_NOT_PERMITTED=3, PAYLOAD_TRUNCATED=2, TIER_BELOW_MINIMUM=1, PAYLOAD_EMPTY=1, CLAIM_UNVERIFIABLE=1, PROVENANCE_LABEL_MISMATCH=2, RESULT_DEGRADED=1, CLAIM_UNGROUNDED=1
-disabled baseline catches: 0
+guard changed the outcome on: 13/20 (65.0%) of block scenarios
+disabled-control invocations: 28
 shape-check baseline catches: 0
+not measured, true by construction: an unguarded pipeline withholds nothing
 
 Saturation warning: basic constructed recall is 100% with only 2 scenarios; this result detects regressions but does not measure adequacy.
 ```
@@ -109,7 +111,9 @@ Saturation warning: basic constructed recall is 100% with only 2 scenarios; this
 Five things in that table are worth reading carefully:
 
 - **Five hard scenarios fail, and they are the interesting rows.** `hard-paraphrased-fabrication`, `hard-recombined-entities`, `hard-unit-shift`, and `hard-appended-qualifier` all defeat the outbound gate the same way: every entity and number in the fabricated claim really does appear in context, so a check that asks _whether the pieces are present_ is satisfied by an assertion that inverts, re-periodizes, or extends what context actually says. Grounding by overlap cannot see relational meaning. `hard-fresh-timestamp-stale-body` defeats the inbound gate because nothing currently checks whether a document's content is as fresh as its `retrievedAt`. These are recorded gaps, not pending fixes hidden behind a green table.
-- **Both baselines catch zero, on all twenty-eight.** With the guards disabled, nothing is caught, which is what the pipeline does today. The shape-check baseline is what a normal test suite checks: output is non-empty and JSON parses. It also catches zero of the twenty. Every polluted output above is a non-empty, well-formed string. Shape tells you nothing about provenance.
+- **`guard_effect` is measured by running every scenario twice.** Once through the guards and once through a control with the guards bypassed, then compared. The guards changed the outcome on **13 of 20** block scenarios; on the other seven the guarded and unguarded pipelines produced the same result, which is what a miss looks like when you measure it instead of asserting it. The control is executed 28 times, once per scenario, and the bench asserts that count — a loop that never ran would otherwise report a clean zero.
+- **One thing in this table is not measured, and is labelled so.** An unguarded pipeline withholds nothing; that is true by construction, not an observation, so it is stated as a definitional line rather than printed as a per-scenario result. An earlier version of this README reported "with the guards disabled, nothing is caught" as though it had been measured. It had not been: the value was a hardcoded constant. See `docs/SECOND_PASS_AUDIT.md` HIGH-2.
+- **The shape-check baseline is genuinely computed and catches zero of the twenty.** It is what a normal test suite checks: output is non-empty and JSON parses. Every polluted output above is a non-empty, well-formed string. Shape tells you nothing about provenance.
 - **`expected_gate` vs `actual_gate` is the honest column.** Every scenario declares which gate _should_ have caught it. Ten of eleven inbound-expected scenarios were caught inbound; one of six outbound-expected scenarios was caught outbound. The outbound gate remains under-exercised as an independent catcher, and the table says so rather than absorbing the result into a single rate.
 - **There is now a measured false positive, and it is the one that was predicted.** `mixed-clean-quoted-error` is a genuine incident postmortem that quotes `HTTP/1.1 503 Service Unavailable` because that is what the incident was. It is **blocked**, with `CLAIM_UNGROUNDED` at the outbound gate. `docs/LIMITATIONS.md` named this exact failure — "an incident postmortem quoting a stack trace, a support ticket pasting an HTTP error" — before any scenario exercised it. The mixed-tier false-positive rate is 1/2. Two controls is not a rate, but one confirmed false positive is a confirmed false positive, and it is the number in this table most likely to matter to you.
 - **The saturation warning is emitted by the bench itself**, not written into this README by hand. When a tier reaches 100% on a small denominator, the report says the number detects regressions and does not measure adequacy.

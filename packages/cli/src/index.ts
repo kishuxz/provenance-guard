@@ -35,6 +35,9 @@ import {
 type Outcome = "allow" | "block";
 type GuardStage = "inbound" | "outbound" | "none";
 type BaselineOutcome = "catch" | "miss";
+type ControlOutcome = "delivered" | "withheld";
+/** Whether the guard changed this scenario's outcome versus the executed control. */
+type GuardEffect = "changed" | "none";
 type RateKind = "recall" | "false_positive";
 
 interface CheckInputChunk {
@@ -104,7 +107,24 @@ export interface BenchScenarioResult {
   passed: boolean;
   stage: GuardStage;
   reasonCode: ReasonCode | null;
-  disabledBaseline: BaselineOutcome;
+  /**
+   * Outcome of executing this scenario with the guards bypassed. Always
+   * `delivered`: an unguarded pipeline withholds nothing. Reported per scenario
+   * only as evidence the control ran, never as a result.
+   */
+  control: ControlOutcome;
+  /** Chunks that reached context under the control. Evidence it ran. */
+  controlAdmittedChunks: number;
+  /**
+   * The measured quantity: did the guard change this scenario's outcome
+   * relative to the executed control?
+   *
+   * This is what the disabled control is for. "The control caught nothing" is
+   * true by construction and worth no column. "The guard changed the outcome
+   * here and not there" is measured, varies across the corpus, and can fail --
+   * every scenario the guards miss shows `none`.
+   */
+  guardEffect: GuardEffect;
   shapeBaseline: BaselineOutcome;
   wouldBlock: boolean;
 }
@@ -133,7 +153,14 @@ export interface BenchSummary {
   saturationWarnings: string[];
   stageBreakdown: Record<GuardStage, number>;
   reasonBreakdown: Partial<Record<ReasonCode, number>>;
-  disabledBaselineCatches: number;
+  /**
+   * How many block-scenarios actually delivered their polluted output when the
+   * guards were bypassed. This can fail: a scenario whose pollution does not
+   * reach context is not testing what it claims.
+   */
+  guardChangedOutcome: BenchRate;
+  /** Times the disabled control was actually invoked. Guards against an empty loop. */
+  controlInvocations: number;
   shapeBaselineCatches: number;
 }
 
@@ -191,6 +218,7 @@ export async function runCheckFile(
 
 export async function runBench(options: { monitor?: boolean } = {}): Promise<BenchResult> {
   const runtime = await loadRuntime();
+  resetControlInvocations();
   const monitor = options.monitor ?? false;
   const scenarios = runtime.harness
     .listScenarios()
@@ -215,7 +243,7 @@ export function formatBenchTable(result: BenchResult): string {
     "actual_gate",
     "reason",
     "stage",
-    "guards_disabled",
+    "guard_effect",
     "shape_check",
   ];
   const rows = result.scenarios.map((scenario) => [
@@ -229,7 +257,7 @@ export function formatBenchTable(result: BenchResult): string {
     scenario.actualGate,
     scenario.reasonCode ?? "-",
     scenario.stage,
-    scenario.disabledBaseline,
+    scenario.guardEffect,
     scenario.shapeBaseline,
   ]);
 
@@ -245,8 +273,10 @@ export function formatBenchTable(result: BenchResult): string {
     `expected->actual gate breakdown: ${formatBreakdown(result.summary.gateBreakdown.expectedActual)}`,
     `stage breakdown: ${formatBreakdown(result.summary.stageBreakdown)}`,
     `reason breakdown: ${formatBreakdown(result.summary.reasonBreakdown)}`,
-    `disabled baseline catches: ${result.summary.disabledBaselineCatches}`,
+    `guard changed the outcome on: ${result.summary.guardChangedOutcome.label} of block scenarios`,
+    `disabled-control invocations: ${result.summary.controlInvocations}`,
     `shape-check baseline catches: ${result.summary.shapeBaselineCatches}`,
+    "not measured, true by construction: an unguarded pipeline withholds nothing",
     ...formatSaturationWarnings(result.summary.saturationWarnings),
   ];
 
@@ -274,6 +304,82 @@ export function formatCheckResult(result: PipelineResult): string {
     .join("\n");
 }
 
+/**
+ * Counts every disabled-control execution.
+ *
+ * Without this, a loop that never ran would report a clean zero and look
+ * identical to a loop that ran and found nothing. The bench asserts the count
+ * matches the scenario count.
+ */
+let controlInvocations = 0;
+
+export function resetControlInvocations(): void {
+  controlInvocations = 0;
+}
+
+export function controlInvocationCount(): number {
+  return controlInvocations;
+}
+
+/**
+ * A runtime with the guards bypassed, wrapping the real one.
+ *
+ * Explicit rather than a flag threaded through the guard itself: the guard has
+ * no "off" mode, and giving it one would put a bypass in production code to
+ * serve a benchmark. Classification still runs, so chunks are still described;
+ * only the admission and grounding *decisions* are replaced.
+ */
+function disabledRuntime(runtime: Runtime): Runtime {
+  return {
+    inbound: {
+      DEFAULT_POLICY: runtime.inbound.DEFAULT_POLICY,
+      classifyChunk: (raw, hints) => runtime.inbound.classifyChunk(raw, hints),
+      // Admits everything. This is what an unguarded pipeline does.
+      checkSlot: () => ({ decision: "allow", reasons: [] }),
+    },
+    harness: runtime.harness,
+    outbound: {
+      // Delivers everything, with no claims extracted and nothing grounded.
+      auditOutput: () => ({
+        verdict: { decision: "allow", reasons: [] },
+        groundings: [],
+        assessments: [],
+      }),
+    },
+  };
+}
+
+/**
+ * Runs one scenario with the guards bypassed and reports what happened.
+ *
+ * The question is not "did it catch anything" — a disabled pipeline catches
+ * nothing by definition, and measuring that would be an executed tautology.
+ * The question is whether the pollution actually reaches context and the output
+ * actually ships, which is a property of the scenario and can be false.
+ */
+function runDisabledControl(
+  runtime: Runtime,
+  scenario: Scenario,
+): { control: ControlOutcome; admittedChunks: number } {
+  controlInvocations += 1;
+
+  const pipeline = runPipeline(
+    disabledRuntime(runtime),
+    scenario.chunks.map((chunk) => ({
+      id: chunk.id,
+      text: chunk.text,
+      provenance: chunk.provenance,
+    })),
+    scenario.simulatedOutput,
+    { policy: runtime.inbound.DEFAULT_POLICY, slotName: DEFAULT_SLOT_NAME, monitor: false },
+  );
+
+  return {
+    control: pipeline.wouldBlock ? "withheld" : "delivered",
+    admittedChunks: pipeline.deliveredChunks.length,
+  };
+}
+
 function runBenchScenario(
   runtime: Runtime,
   scenario: Scenario,
@@ -291,6 +397,7 @@ function runBenchScenario(
   );
   const expectedOutcome = scenario.expectation === "should_block" ? "block" : "allow";
   const actual = monitor ? "allow" : pipeline.outcome;
+  const { control, admittedChunks } = runDisabledControl(runtime, scenario);
 
   return {
     id: scenario.id,
@@ -303,7 +410,11 @@ function runBenchScenario(
     passed: pipeline.outcome === expectedOutcome,
     stage: pipeline.stage,
     reasonCode: pipeline.reasonCode,
-    disabledBaseline: "miss",
+    control,
+    controlAdmittedChunks: admittedChunks,
+    // Measured both ways, then compared. Not derived from the scenario's
+    // declared expectation.
+    guardEffect: pipeline.wouldBlock === (control === "withheld") ? "none" : "changed",
     shapeBaseline: shapeCheckCatches(scenario.simulatedOutput) ? "catch" : "miss",
     wouldBlock: pipeline.wouldBlock,
   };
@@ -338,7 +449,13 @@ function summarizeBench(results: BenchScenarioResult[]): BenchSummary {
     saturationWarnings: saturationWarnings(recall, falsePositiveRate),
     stageBreakdown,
     reasonBreakdown,
-    disabledBaselineCatches: 0,
+    guardChangedOutcome: makeRate({
+      kind: "recall",
+      difficulty: "basic",
+      numerator: shouldBlock.filter((result) => result.guardEffect === "changed").length,
+      denominator: shouldBlock.length,
+    }),
+    controlInvocations: controlInvocationCount(),
     shapeBaselineCatches: shouldBlock.filter((result) => result.shapeBaseline === "catch").length,
   };
 }
