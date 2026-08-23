@@ -1,0 +1,26 @@
+# Local Neo4j for the @provguard/neo4j adapter demonstration.
+#
+# Neo4j is optional. Nothing in the core depends on this: the guards, the CLI
+# and the bench all run with no database, no network and no credentials. This
+# exists to show that the graph's semantics do not depend on one vendor.
+#
+#   docker compose -f packages/neo4j/docker-compose.yml up -d
+#   PROVGUARD_NEO4J_URI=bolt://localhost:7687 pnpm test
+#   docker compose -f packages/neo4j/docker-compose.yml down -v
+services:
+  neo4j:
+    image: neo4j:5-community
+    container_name: provguard-neo4j
+    ports:
+      - "7474:7474" # HTTP browser
+      - "7687:7687" # Bolt
+    environment:
+      # Development credentials for a local, throwaway instance. Do not reuse
+      # these anywhere that matters.
+      NEO4J_AUTH: neo4j/provguardtest
+      NEO4J_server_memory_heap_max__size: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:7474 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
