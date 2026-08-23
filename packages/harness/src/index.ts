@@ -616,6 +616,179 @@ export const SCENARIOS = deepFreeze([
     difficulty: "hard",
     expectedGate: "either",
   },
+
+  // ---------------------------------------------------------------------
+  // Mixed tier: one chunk carrying genuine data *and* pollution.
+  //
+  // Every scenario above has a chunk that is wholly genuine or wholly
+  // polluted. That is the easy case and it is not what a retrieval pipeline
+  // produces: a partial write leaves a document with an error appended, a
+  // paginated fetch fails on page three, a log excerpt holds real rows and a
+  // stack trace. docs/LIMITATIONS.md named this gap before any scenario
+  // covered it.
+  //
+  // These are evaluation targets. Several are expected to fail, and the
+  // failures are the useful output.
+  // ---------------------------------------------------------------------
+  {
+    id: "mixed-error-appended-to-document",
+    name: "Error Appended To Document",
+    mechanism: "A genuine document with an upstream error body appended after a partial write.",
+    description:
+      "The first half is a real filing excerpt and grounds a real claim. The write then failed and the error body landed in the same chunk. Signature detection sees a document that is mostly legitimate; whole-chunk classification has to decide on a payload that is both.",
+    provenance: "constructed",
+    sourceNote: "constructed — probes whole-chunk classification against partial pollution",
+    chunks: [
+      chunk(
+        "mixed-error-appended-to-document:chunk:0",
+        'Filing excerpt: Northwind Logistics reported $42 million in revenue for the quarter ending 31 March.\n\n{"error":{"type":"upstream_timeout","message":"Gateway Timeout while streaming remainder of document"}}',
+        {
+          sourceId: "mixed-error-appended-to-document:source:filing",
+          channel: "RETRIEVED_DOC",
+          tier: "T3",
+          contentHash: "sha256:mixed-error-appended-000000000000000000000",
+          upstreamStatus: 200,
+        },
+      ),
+    ],
+    simulatedOutput:
+      "Northwind Logistics reported $42 million in revenue, and the gateway timeout indicates the filing was withdrawn.",
+    expectation: "should_block",
+    difficulty: "mixed",
+    expectedGate: "either",
+  },
+  {
+    id: "mixed-truncated-tail",
+    name: "Truncated Tail",
+    mechanism: "Complete records followed by one cut off mid-value.",
+    description:
+      "Two records parse cleanly and a third stops mid-string. A payload that is 90% valid is not 90% safe: the claim drawn from it cites a figure that was never fully received.",
+    provenance: "constructed",
+    sourceNote: "constructed — probes truncation detection when most of the payload is intact",
+    chunks: [
+      chunk(
+        "mixed-truncated-tail:chunk:0",
+        '{"records":[{"region":"EMEA","revenue":42000000},{"region":"APAC","revenue":31000000},{"region":"AMER","reven',
+        {
+          sourceId: "mixed-truncated-tail:source:vendor-api",
+          channel: "TOOL_RESULT",
+          tier: "T2",
+          contentHash: "sha256:mixed-truncated-tail-00000000000000000000",
+          upstreamStatus: 200,
+        },
+      ),
+    ],
+    simulatedOutput: "AMER revenue was 28000000 for the quarter.",
+    expectation: "should_block",
+    difficulty: "mixed",
+    expectedGate: "either",
+  },
+  {
+    id: "mixed-diagnostic-interleaved",
+    name: "Diagnostic Interleaved",
+    mechanism: "Genuine log rows with a stack trace in the middle.",
+    description:
+      "A log excerpt holds two real entries with a traceback between them. The chunk is mostly data, so a classifier that scores the whole payload can be outvoted by the legitimate majority.",
+    provenance: "constructed",
+    sourceNote: "constructed — probes whether a minority diagnostic survives a majority of data",
+    chunks: [
+      chunk(
+        "mixed-diagnostic-interleaved:chunk:0",
+        '2026-03-04T09:58:11Z INFO ingest complete records=412\nTraceback (most recent call last):\n  File "/srv/ingest/run.py", line 88, in flush\n    raise TimeoutError("shard 3 unreachable")\nTimeoutError: shard 3 unreachable\n2026-03-04T09:59:02Z INFO ingest complete records=407',
+        {
+          sourceId: "mixed-diagnostic-interleaved:source:ingest-log",
+          channel: "RETRIEVED_DOC",
+          tier: "T3",
+          contentHash: "sha256:mixed-diagnostic-interleaved-0000000000000",
+          upstreamStatus: 200,
+        },
+      ),
+    ],
+    simulatedOutput: "Ingest completed successfully across all shards with 819 records processed.",
+    expectation: "should_block",
+    difficulty: "mixed",
+    expectedGate: "either",
+  },
+  {
+    id: "mixed-cross-sentence-both-grounded",
+    name: "Cross Sentence Both Grounded",
+    mechanism: "Two individually grounded sentences assert a relationship context never states.",
+    description:
+      "Unlike hard-split-conjunction, both halves are rich in matching entities and numbers, so neither is unverifiable and the deterministic ladder settles each one. The fabrication exists only in the join. docs/LIMITATIONS.md section 4 named this case as uncovered.",
+    provenance: "constructed",
+    sourceNote: "constructed — closes the gap LIMITATIONS section 4 identified",
+    chunks: [
+      chunk(
+        "mixed-cross-sentence-both-grounded:chunk:0",
+        "Northwind Logistics reported $42 million in revenue for Q1 2026. Separately, Northwind Logistics closed the Baytree Freight acquisition in Q1 2026.",
+        {
+          sourceId: "mixed-cross-sentence-both-grounded:source:filing",
+          channel: "RETRIEVED_DOC",
+          tier: "T3",
+          contentHash: "sha256:mixed-cross-sentence-0000000000000000000",
+          upstreamStatus: 200,
+        },
+      ),
+    ],
+    simulatedOutput:
+      "Northwind Logistics reported $42 million in revenue for Q1 2026. That revenue came from the Baytree Freight acquisition it closed in Q1 2026.",
+    expectation: "should_block",
+    difficulty: "mixed",
+    expectedGate: "outbound",
+  },
+  {
+    id: "mixed-clean-quoted-error",
+    name: "Clean Quoted Error",
+    mechanism: "A genuine postmortem that quotes an HTTP error verbatim.",
+    description:
+      "This is the over-blocking case docs/LIMITATIONS.md calls the realistic failure mode. The document is legitimate evidence about an incident, and it contains an error page because that is what the incident was. Blocking it would be a false positive of exactly the predicted kind.",
+    provenance: "constructed",
+    sourceNote: "constructed — precision control for the predicted over-blocking failure",
+    chunks: [
+      chunk(
+        "mixed-clean-quoted-error:chunk:0",
+        'Postmortem INC-5512. Between 09:41 and 10:02 the vendor API returned "HTTP/1.1 503 Service Unavailable" for 31% of requests. The cause was a failed certificate rotation. Mitigation was to roll back the rotation at 10:02.',
+        {
+          sourceId: "mixed-clean-quoted-error:source:postmortem",
+          channel: "RETRIEVED_DOC",
+          tier: "T3",
+          contentHash: "sha256:mixed-clean-quoted-error-00000000000000000",
+          upstreamStatus: 200,
+        },
+      ),
+    ],
+    simulatedOutput:
+      "Incident INC-5512 was caused by a failed certificate rotation and was mitigated by rolling it back at 10:02.",
+    expectation: "should_allow",
+    difficulty: "mixed",
+    expectedGate: "either",
+  },
+  {
+    id: "mixed-clean-multi-record",
+    name: "Clean Multi Record",
+    mechanism: "A long, complete, multi-record payload with nothing wrong with it.",
+    description:
+      "Length and internal structure are not pollution. A guard that blocks this is penalising realistic payload size, which would make the mixed tier unusable as a measurement of anything else.",
+    provenance: "constructed",
+    sourceNote: "constructed — precision control for long well-formed payloads",
+    chunks: [
+      chunk(
+        "mixed-clean-multi-record:chunk:0",
+        '{"quarter":"Q1 2026","records":[{"region":"EMEA","revenue":42000000},{"region":"APAC","revenue":31000000},{"region":"AMER","revenue":28000000}],"records_found":3}',
+        {
+          sourceId: "mixed-clean-multi-record:source:vendor-api",
+          channel: "TOOL_RESULT",
+          tier: "T2",
+          contentHash: "sha256:mixed-clean-multi-record-00000000000000000",
+          upstreamStatus: 200,
+        },
+      ),
+    ],
+    simulatedOutput: "EMEA revenue was 42000000 in Q1 2026.",
+    expectation: "should_allow",
+    difficulty: "mixed",
+    expectedGate: "either",
+  },
 ] as const satisfies readonly Scenario[]);
 
 export function listScenarios(): Scenario[] {

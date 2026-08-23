@@ -10,7 +10,7 @@ describe("provguard bench", () => {
   it("matches basic harness scenario expectations", async () => {
     const result = await runBench();
 
-    expect(result.scenarios).toHaveLength(22);
+    expect(result.scenarios).toHaveLength(28);
     for (const scenario of result.scenarios.filter((item) => item.difficulty === "basic")) {
       expect(scenario.passed, scenario.id).toBe(true);
       expect(scenario.actual).toBe(scenario.expected === "should_block" ? "block" : "allow");
@@ -162,7 +162,7 @@ describe("provguard bench", () => {
     );
     expect(result.summary.gateBreakdown.outboundValidated).toBe(1);
     expect(result.summary.gateBreakdown.expected.inbound).toBe(11);
-    expect(result.summary.gateBreakdown.actual.outbound).toBe(1);
+    expect(result.summary.gateBreakdown.actual.outbound).toBe(2);
     expect(table).toContain("expected_gate");
     expect(table).toContain("actual_gate");
     expect(table).toContain("outbound gate validations: 1");
@@ -180,11 +180,36 @@ describe("provguard bench", () => {
     expect(table).toContain("this result detects regressions but does not measure adequacy");
   });
 
+  it("records the first measured false positive rather than hiding it", async () => {
+    // mixed-clean-quoted-error is a genuine incident postmortem that quotes an
+    // HTTP error. It is blocked. docs/LIMITATIONS.md predicted exactly this
+    // over-blocking failure before any scenario exercised it, and the number
+    // is pinned here so a future change cannot quietly lose or worsen it.
+    const result = await runBench();
+    const control = result.scenarios.find((scenario) => scenario.id === "mixed-clean-quoted-error");
+
+    expect(control?.expected).toBe("should_allow");
+    expect(control?.actual).toBe("block");
+    expect(control?.reasonCode).toBe("CLAIM_UNGROUNDED");
+    expect(result.summary.falsePositiveRate.mixed.label).toBe("1/2 (50.0%)");
+  });
+
+  it("leaves the basic and hard rates untouched by the mixed tier", async () => {
+    // Adding a tier must not move an existing measurement. Folding mixed into
+    // hard would have done exactly that.
+    const result = await runBench();
+
+    expect(result.summary.recall.basic.derived.label).toBe("6/6 (100.0%)");
+    expect(result.summary.recall.basic.constructed.label).toBe("2/2 (100.0%)");
+    expect(result.summary.recall.hard.constructed.label).toBe("3/8 (37.5%)");
+    expect(result.summary.recall.mixed.constructed.label).toBe("2/4 (50.0%)");
+  });
+
   it("keeps monitor mode from blocking delivery while preserving would-block results", async () => {
     const result = await runBench({ monitor: true });
 
     expect(result.monitor).toBe(true);
-    expect(result.scenarios.filter((scenario) => scenario.wouldBlock)).toHaveLength(11);
+    expect(result.scenarios.filter((scenario) => scenario.wouldBlock)).toHaveLength(14);
     expect(result.scenarios.every((scenario) => scenario.actual === "allow")).toBe(true);
   });
 
@@ -216,6 +241,7 @@ describe("provguard bench", () => {
       );
       expect(result.summary.recall).toHaveProperty("basic");
       expect(result.summary.recall).toHaveProperty("hard");
+      expect(result.summary.recall).toHaveProperty("mixed");
       expect(result.summary.falsePositiveRate).toHaveProperty("basic");
       expect(result.summary.gateBreakdown.outboundValidated).toBe(1);
       expect(result.summary.saturationWarnings.length).toBeGreaterThan(0);
