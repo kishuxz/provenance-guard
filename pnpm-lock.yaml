@@ -96,6 +96,21 @@ importers:
         specifier: workspace:*
         version: link:../schema
 
+  packages/middleware:
+    dependencies:
+      '@provguard/graph':
+        specifier: workspace:*
+        version: link:../graph
+      '@provguard/inbound':
+        specifier: workspace:*
+        version: link:../inbound
+      '@provguard/outbound':
+        specifier: workspace:*
+        version: link:../outbound
+      '@provguard/schema':
+        specifier: workspace:*
+        version: link:../schema
+
   packages/neo4j:
     dependencies:
       '@provguard/graph':

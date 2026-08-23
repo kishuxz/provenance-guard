@@ -12,7 +12,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "pnpm --filter @provguard/schema build && pnpm --filter @provguard/inbound build && pnpm --filter @provguard/outbound build && pnpm --filter @provguard/graph build && pnpm --filter @provguard/judge build && pnpm --filter @provguard/harness build && pnpm --filter @provguard/neo4j build && pnpm --filter @provguard/cli build && pnpm --filter @provguard/demo build",
+    "build": "pnpm --filter @provguard/schema build && pnpm --filter @provguard/inbound build && pnpm --filter @provguard/outbound build && pnpm --filter @provguard/graph build && pnpm --filter @provguard/judge build && pnpm --filter @provguard/harness build && pnpm --filter @provguard/neo4j build && pnpm --filter @provguard/middleware build && pnpm --filter @provguard/cli build && pnpm --filter @provguard/demo build",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "test": "vitest run",

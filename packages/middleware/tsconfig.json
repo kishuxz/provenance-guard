@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "outDir": "dist",
+    "paths": {
+      "@provguard/graph": ["../graph/src/index.ts"],
+      "@provguard/inbound": ["../inbound/src/index.ts"],
+      "@provguard/outbound": ["../outbound/src/index.ts"],
+      "@provguard/schema": ["../schema/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}
