@@ -78,6 +78,14 @@ export {
 export { MemoryGraphStore } from "./store.js";
 
 export {
+  MemoryGraphAdapter,
+  conformanceCases,
+  type ConformanceCase,
+  type GraphStoreAdapter,
+  type GraphStoreCapabilities,
+} from "./adapter.js";
+
+export {
   FORWARD_STEPS,
   impact,
   type AffectedNode,
