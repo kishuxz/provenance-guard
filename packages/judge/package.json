@@ -1,7 +1,20 @@
 {
   "name": "@provguard/judge",
   "version": "0.1.0",
+  "description": "Offline fixture judge for Provenance Guard, for claims the deterministic grounding ladder leaves uncertain.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kishuxz/provenance-guard.git",
+    "directory": "packages/judge"
+  },
+  "homepage": "https://github.com/kishuxz/provenance-guard#readme",
+  "bugs": {
+    "url": "https://github.com/kishuxz/provenance-guard/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -10,6 +23,15 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

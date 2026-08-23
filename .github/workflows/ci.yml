@@ -98,6 +98,34 @@ jobs:
             perf-table.txt
           if-no-files-found: error
 
+  # Every other test runs inside the workspace, where dist/ exists on disk and
+  # imports resolve through pnpm symlinks. That is why none of them caught the
+  # published tarballs omitting dist/ entirely. This job packs real tarballs and
+  # verifies them from an empty consumer project.
+  packaging:
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4.4.0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4.4.0
+        with:
+          version: 10.14.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Pack, install and import from a clean consumer
+        run: pnpm pack-check
+
   # The Neo4j adapter's tests skip when no database is reachable, so `verify`
   # stays green on a machine without Docker and the offline core requirement
   # holds. A skipped test is not evidence, so they are also run here against a
