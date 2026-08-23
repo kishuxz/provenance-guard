@@ -296,6 +296,64 @@ describe("graph validate", () => {
   });
 });
 
+describe("untrusted graph documents", () => {
+  it("refuses a forged-ownership graph rather than serving it", async () => {
+    // Graph JSON read from a path is untrusted input. Before this was fixed the
+    // CLI loaded it straight into the store, which filtered reads on a tenantId
+    // field the document itself supplied.
+    const { graphPath } = await checkWithGraph(CLEAN_INPUT, ["--unredacted"]);
+    const document = JSON.parse(await readFile(graphPath, "utf8")) as {
+      nodes: Record<string, unknown>[];
+    };
+    const target = document.nodes.find((node) => node.kind === "Run") as Record<string, unknown>;
+    target.tenantId = "globex";
+    await writeFile(graphPath, JSON.stringify(document));
+
+    const stderr = captureStderr();
+    const code = await main(["trace", graphPath, String(target.id), "--tenant", "globex"]);
+
+    expect(code).toBe(2);
+    expect(stderr.lines()).toContain("refusing to load");
+  });
+
+  it("applies the same refusal to explain and impact", async () => {
+    const { graphPath } = await checkWithGraph(CLEAN_INPUT, ["--unredacted"]);
+    const document = JSON.parse(await readFile(graphPath, "utf8")) as {
+      nodes: Record<string, unknown>[];
+    };
+    const chunk = document.nodes.find((node) => node.kind === "Chunk") as Record<string, unknown>;
+    chunk.contentHash = "sha256:rewritten";
+    await writeFile(graphPath, JSON.stringify(document));
+
+    for (const command of ["explain", "impact"]) {
+      const stderr = captureStderr();
+      const code = await main([command, graphPath, String(chunk.id)]);
+
+      expect(code, command).toBe(2);
+      expect(stderr.lines(), command).toContain("refusing to load");
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("still validates and reports on a graph that fails a semantic invariant", async () => {
+    // graph validate must keep working on exactly the graphs the store accepts
+    // but the invariants reject, or a real defect becomes unexaminable.
+    const { graphPath } = await checkWithGraph(CLEAN_INPUT, ["--unredacted"]);
+    const document = JSON.parse(await readFile(graphPath, "utf8")) as {
+      nodes: Record<string, unknown>[];
+    };
+    const chunk = document.nodes.find((node) => node.kind === "Chunk") as Record<string, unknown>;
+    chunk.admitted = false;
+    await writeFile(graphPath, JSON.stringify(document));
+
+    const stdout = captureStdout();
+    const code = await main(["graph", "validate", graphPath]);
+
+    expect(code).toBe(1);
+    expect(stdout.lines()).toContain("GRAPH_SUPPORT_FROM_BLOCKED_CHUNK");
+  });
+});
+
 describe("failure modes", () => {
   it("reports a missing node id with a message, not a stack trace", async () => {
     const { graphPath } = await checkWithGraph(CLEAN_INPUT);

@@ -75,7 +75,7 @@ export {
   type SerializeOptions,
 } from "./serialize.js";
 
-export { MemoryGraphStore } from "./store.js";
+export { MemoryGraphStore, assertLoadable } from "./store.js";
 
 export {
   MemoryGraphAdapter,

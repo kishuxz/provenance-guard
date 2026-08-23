@@ -22,6 +22,18 @@ function storeOf(graph: GraphInput = baselineGraph()): MemoryGraphStore {
   return new MemoryGraphStore(graph);
 }
 
+/**
+ * Loads without validation, for graphs deliberately built broken.
+ *
+ * `load` now rejects cycles, which is right: a cyclic lineage is corrupt and
+ * should not enter a store. But traversal still has to terminate on a graph
+ * that was never validated -- that is exactly when someone reaches for trace --
+ * so these cases opt out explicitly rather than the store going quiet on them.
+ */
+function uncheckedStore(graph: GraphInput): MemoryGraphStore {
+  return new MemoryGraphStore().loadUnchecked(graph);
+}
+
 function idOf(store: MemoryGraphStore, kind: GraphNode["kind"]): string {
   const node = store.nodes(TENANT, kind)[0];
   if (node === undefined) {
@@ -141,7 +153,7 @@ describe("termination and bounds", () => {
     // graph — that is exactly when someone reaches for it.
     const graph = baselineGraph();
     const artifact = graph.nodes.find((node) => node.kind === "Artifact") as GraphNode;
-    const store = storeOf({
+    const store = uncheckedStore({
       nodes: graph.nodes,
       edges: [
         ...graph.edges,
