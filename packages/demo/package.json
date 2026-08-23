@@ -1,8 +1,21 @@
 {
   "name": "@provguard/demo",
   "version": "0.1.0",
+  "description": "Narrated walkthrough of the Provenance Guard D1 incident chain.",
   "license": "Apache-2.0",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kishuxz/provenance-guard.git",
+    "directory": "packages/demo"
+  },
+  "homepage": "https://github.com/kishuxz/provenance-guard#readme",
+  "bugs": {
+    "url": "https://github.com/kishuxz/provenance-guard/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "main": "./dist/demo.js",
   "types": "./dist/demo.d.ts",
@@ -12,6 +25,12 @@
       "default": "./dist/demo.js"
     }
   },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "demo": "pnpm build && node dist/demo.js",
