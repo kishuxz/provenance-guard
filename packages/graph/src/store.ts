@@ -76,6 +76,16 @@ export class MemoryGraphStore {
     return edge?.tenantId === tenantId ? edge : undefined;
   }
 
+  /**
+   * Nodes in this tenant, optionally of one kind.
+   *
+   * Overloaded so passing a kind narrows the result type: a caller asking for
+   * `"Artifact"` gets `ArtifactNode[]` and can read `contentHash` without a
+   * cast. Returning the bare union would push a cast to every call site, and a
+   * cast is exactly where a wrong-kind assumption stops being checked.
+   */
+  nodes(tenantId: string): GraphNode[];
+  nodes<K extends NodeKind>(tenantId: string, kind: K): Extract<GraphNode, { kind: K }>[];
   nodes(tenantId: string, kind?: NodeKind): GraphNode[] {
     assertTenantId(tenantId);
     return sortById(
