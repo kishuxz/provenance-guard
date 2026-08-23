@@ -49,6 +49,14 @@ export {
 } from "./nodes.js";
 
 export {
+  buildGraph,
+  type RunAudit,
+  type RunAuditChunk,
+  type RunAuditClaim,
+  type RunAuditPolicy,
+} from "./build.js";
+
+export {
   validateGraph,
   type GraphInput,
   type GraphViolation,
