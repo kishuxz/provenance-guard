@@ -78,6 +78,16 @@ export {
 export { MemoryGraphStore } from "./store.js";
 
 export {
+  BACKWARD_STEPS,
+  explain,
+  trace,
+  type Explanation,
+  type TraceOptions,
+  type TracePath,
+  type TraceResult,
+} from "./trace.js";
+
+export {
   ACYCLIC_EDGE_TYPES,
   EDGE_MATRIX,
   EdgeTypes,
