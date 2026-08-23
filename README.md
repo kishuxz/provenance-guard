@@ -184,17 +184,18 @@ Node and edge IDs are deterministic: the same input produces the same graph on a
 
 ## Packages
 
-| Package               | Role                                                                       |
-| --------------------- | -------------------------------------------------------------------------- |
-| `@provguard/schema`   | Shared types: `Chunk`, `Provenance`, `Verdict`, `ReasonCode`, slot policy  |
-| `@provguard/inbound`  | Chunk classification and slot admission                                    |
-| `@provguard/outbound` | Claim extraction, deterministic grounding ladder, and audit records        |
-| `@provguard/judge`    | Offline fixture judge for claims the deterministic ladder leaves uncertain |
-| `@provguard/graph`    | Typed lineage graph: node and edge model, deterministic IDs, edge matrix   |
-| `@provguard/harness`  | The twenty-two deterministic scenarios and their difficulty metadata       |
-| `@provguard/cli`      | `check`, `bench`, `trace`, `explain`, `impact`, `graph validate`           |
-| `@provguard/neo4j`    | Optional Neo4j storage adapter. Nothing in the core depends on it          |
-| `@provguard/demo`     | Narrated stdout walkthrough of the D1 chain, guards off then on            |
+| Package                 | Role                                                                       |
+| ----------------------- | -------------------------------------------------------------------------- |
+| `@provguard/schema`     | Shared types: `Chunk`, `Provenance`, `Verdict`, `ReasonCode`, slot policy  |
+| `@provguard/inbound`    | Chunk classification and slot admission                                    |
+| `@provguard/outbound`   | Claim extraction, deterministic grounding ladder, and audit records        |
+| `@provguard/judge`      | Offline fixture judge for claims the deterministic ladder leaves uncertain |
+| `@provguard/graph`      | Typed lineage graph: node and edge model, deterministic IDs, edge matrix   |
+| `@provguard/harness`    | The twenty-two deterministic scenarios and their difficulty metadata       |
+| `@provguard/cli`        | `check`, `bench`, `trace`, `explain`, `impact`, `graph validate`           |
+| `@provguard/middleware` | Framework-neutral monitor/enforce guard. No HTTP, no framework             |
+| `@provguard/neo4j`      | Optional Neo4j storage adapter. Nothing in the core depends on it          |
+| `@provguard/demo`       | Narrated stdout walkthrough of the D1 chain, guards off then on            |
 
 ## Verification
 
