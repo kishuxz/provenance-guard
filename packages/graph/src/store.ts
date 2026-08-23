@@ -1,8 +1,8 @@
-import { GraphError } from "./codes.js";
+import { GraphError, type GraphViolationCode } from "./codes.js";
 import type { EdgeType, GraphEdge } from "./edges.js";
 import { assertTenantId } from "./ids.js";
 import type { GraphNode, NodeKind } from "./nodes.js";
-import type { GraphInput } from "./validate.js";
+import { validateGraph, type GraphInput } from "./validate.js";
 
 /**
  * The zero-infrastructure store.
@@ -29,11 +29,39 @@ export class MemoryGraphStore {
   }
 
   /**
-   * Adds nodes and edges. Idempotent: identity is derived, so recording the
-   * same fact twice converges rather than accumulating duplicates, which is
-   * what lets an interrupted ingest be retried safely.
+   * Loads a graph without validating it.
+   *
+   * For callers that have already validated, or that are deliberately
+   * assembling a known-bad graph in a test. Named so that using it is a visible
+   * decision: `load` is the safe default and this is the opt-out.
+   */
+  loadUnchecked(graph: GraphInput): this {
+    return this.#apply(graph);
+  }
+
+  /**
+   * Validates, then adds nodes and edges.
+   *
+   * A graph document arriving from disk, an API or another tenant's export is
+   * untrusted input. Filtering reads on a `tenantId` field that the document
+   * itself supplies is not isolation, so the document is checked before any of
+   * it is stored.
+   *
+   * Structural and scope failures reject the whole batch. Semantic invariant
+   * failures do not: a graph recording that a claim rested on a refused chunk
+   * is a true record of a real defect, and refusing to store it would make the
+   * defect unexaminable. Judging the record is `validateGraph`'s job.
+   *
+   * Idempotent: identity is derived, so recording the same fact twice converges
+   * rather than accumulating duplicates.
    */
   load(graph: GraphInput): this {
+    assertLoadable(graph);
+    return this.#apply(graph);
+  }
+
+  /** Mutation, separated so validation cannot be accidentally skipped. */
+  #apply(graph: GraphInput): this {
     for (const node of graph.nodes) {
       this.#nodes.set(node.id, node);
     }
@@ -149,6 +177,47 @@ export class MemoryGraphStore {
     }
 
     return sortById(found);
+  }
+}
+
+/**
+ * Violations that make a document unfit to store at all.
+ *
+ * Deliberately narrow. These are failures of structure and scope -- the
+ * document is not a well-formed record, or it claims elements it does not own.
+ * Every other violation describes something that genuinely happened and must
+ * remain storable and inspectable.
+ */
+const REJECTS_LOAD: readonly GraphViolationCode[] = [
+  "GRAPH_SCHEMA_INVALID",
+  "GRAPH_ID_MISMATCH",
+  "GRAPH_DUPLICATE_ID",
+  "GRAPH_TENANT_MISMATCH",
+  "GRAPH_RUN_MISMATCH",
+  "GRAPH_EDGE_TYPE_NOT_PERMITTED",
+  "GRAPH_CYCLE_DETECTED",
+];
+
+/**
+ * Throws unless the graph is fit to store.
+ *
+ * Runs before any mutation, so a rejected load leaves the store exactly as it
+ * was. Rolling back after a partial write would depend on the write having been
+ * observable, which is the failure this prevents.
+ */
+export function assertLoadable(graph: GraphInput): void {
+  const blocking = validateGraph(graph).violations.filter((violation) =>
+    REJECTS_LOAD.includes(violation.code),
+  );
+
+  if (blocking.length > 0) {
+    throw new GraphError(
+      blocking[0]?.code ?? "GRAPH_SCHEMA_INVALID",
+      `refusing to load a graph with ${blocking.length} structural or scope violation(s)`,
+      blocking
+        .slice(0, 10)
+        .map((violation) => `${violation.code} ${violation.elementId}: ${violation.message}`),
+    );
   }
 }
 

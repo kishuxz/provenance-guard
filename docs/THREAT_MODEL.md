@@ -33,6 +33,10 @@ No attacker is required. That is the defining property, and it is why input sani
 
 **Cypher injection.** Every value is a parameter; no caller-supplied value is interpolated. String-interpolating a tenant ID would make isolation depend on input being well formed.
 
+**Forged ownership in an imported graph.** A graph document is untrusted input. Filtering reads on a `tenantId` field the document itself supplies is not isolation, so `MemoryGraphStore.load` validates schema, identity, tenant scope and run scope _before_ mutating anything, and a rejected load leaves the store byte-identical. `loadUnchecked` is the explicit, named opt-out for callers deliberately handling a known-bad graph.
+
+Semantic invariant failures deliberately do **not** block a load: a graph recording that a claim rested on a refused chunk is a true record of a real defect, and refusing to store it would make the defect unexaminable.
+
 **History rewriting.** A node whose stored ID does not re-derive from its own fields is reported as `GRAPH_ID_MISMATCH`. Appending is normal; editing is detectable.
 
 **Secret leakage through the ledger.** Source URI credentials are stripped at node creation, so they are never recorded — an export filter only protects copies that pass through it, not the database or the logs. Chunk, claim, and output text are redacted on export by default. Every redactable attribute is a non-identity field, so a redacted export still validates.

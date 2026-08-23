@@ -22,6 +22,11 @@ export interface GraphRuntime {
   toCanonicalJSON(graph: GraphInput, options?: { redact?: boolean }): string;
   fromCanonicalJSON(text: string): GraphInput;
   contentDigest(value: string): string;
+  /**
+   * Constructing with a graph validates it. Graph JSON read from a path is
+   * untrusted input, so `trace`, `explain` and `impact` refuse a structurally
+   * or scope-invalid document rather than serving it.
+   */
   MemoryGraphStore: new (graph?: GraphInput) => MemoryGraphStore;
   trace(store: MemoryGraphStore, tenantId: string, targetId: string): TraceResult;
   explain(store: MemoryGraphStore, tenantId: string, targetId: string): Explanation;
