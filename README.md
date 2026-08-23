@@ -224,15 +224,20 @@ pnpm exec provguard bench --json
 
 ## Documentation
 
-| Document                                                         | What it is                                                          |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------- |
-| [docs/LIMITATIONS.md](docs/LIMITATIONS.md)                       | What the numbers do not mean. Read before citing any of them        |
-| [docs/PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md)                     | User-visible behavior, public interfaces, and release criteria      |
-| [docs/GRAPH_ENGINEERING_PLAN.md](docs/GRAPH_ENGINEERING_PLAN.md) | Graph model, invariants, traversals, and storage rollout            |
-| [docs/AUTONOMOUS_EXECUTION.md](docs/AUTONOMOUS_EXECUTION.md)     | Work graph, agent loop, lane boundaries, and gates                  |
-| [docs/PERFORMANCE.md](docs/PERFORMANCE.md)                       | What was measured, on what fixture, on which machine                |
-| [docs/NEO4J.md](docs/NEO4J.md)                                   | The optional Neo4j adapter, its storage model and its limits        |
-| [AGENTS.md](AGENTS.md)                                           | The engineering contract every contributor and coding agent follows |
+| Document                                                         | What it is                                                                  |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| [docs/LIMITATIONS.md](docs/LIMITATIONS.md)                       | What the numbers do not mean. Read before citing any of them                |
+| [docs/PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md)                     | User-visible behavior, public interfaces, and release criteria              |
+| [docs/GRAPH_ENGINEERING_PLAN.md](docs/GRAPH_ENGINEERING_PLAN.md) | Graph model, invariants, traversals, and storage rollout                    |
+| [docs/AUTONOMOUS_EXECUTION.md](docs/AUTONOMOUS_EXECUTION.md)     | Work graph, agent loop, lane boundaries, and gates                          |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)                     | The two gates, the ledger, and why the package boundaries sit where they do |
+| [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md)                     | What this defends against, what it does not, and the residual risks         |
+| [docs/INTEGRATION.md](docs/INTEGRATION.md)                       | How to adopt it, starting with monitor mode                                 |
+| [docs/INCIDENT.md](docs/INCIDENT.md)                             | The D1 chain end to end, with real trace, explain and impact output         |
+| [docs/REVIEW.md](docs/REVIEW.md)                                 | The v0.1 review record, including what the review could not establish       |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md)                       | What was measured, on what fixture, on which machine                        |
+| [docs/NEO4J.md](docs/NEO4J.md)                                   | The optional Neo4j adapter, its storage model and its limits                |
+| [AGENTS.md](AGENTS.md)                                           | The engineering contract every contributor and coding agent follows         |
 
 ## License
 
