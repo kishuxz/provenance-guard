@@ -6,6 +6,7 @@ import {
   REDACTABLE_ATTRIBUTES,
   createNode,
   expectedNodeId,
+  identityFields,
   runOf,
   type GraphNodeInput,
 } from "../src/index.js";
@@ -151,8 +152,13 @@ describe("REDACTABLE_ATTRIBUTES", () => {
   it("marks every attribute that can carry raw material", () => {
     // A regression here is a silent export leak, so the expectation is written
     // out rather than derived from the map it is checking.
+    //
+    // Source.uri is deliberately absent. It is an identity field, so blanking
+    // it on export would leave the node's id un-derivable and every redacted
+    // export failing GRAPH_ID_MISMATCH. Credentials are stripped when the node
+    // is created instead, so the secret is never recorded at all.
     expect(REDACTABLE_ATTRIBUTES).toEqual({
-      Source: ["uri"],
+      Source: [],
       Run: [],
       Step: [],
       Artifact: [],
@@ -162,6 +168,59 @@ describe("REDACTABLE_ATTRIBUTES", () => {
       Verdict: [],
       Output: ["text"],
     });
+  });
+
+  it("never marks an identity field as redactable", () => {
+    // The property the redaction design rests on, asserted directly rather
+    // than left implicit in the list above: redacting a field that determines
+    // identity would make every redacted export fail validation. This holds
+    // for any future kind, not just today's.
+    const samples: GraphNodeInput[] = [
+      {
+        kind: "Source",
+        tenantId: "acme",
+        observedAt: OBSERVED_AT,
+        uri: "https://vendor.test/a",
+        sourceKind: "retrieval",
+      },
+      {
+        kind: "Run",
+        tenantId: "acme",
+        observedAt: OBSERVED_AT,
+        runKey: "r",
+        startedAt: OBSERVED_AT,
+      },
+      chunkInput(),
+      {
+        kind: "Claim",
+        tenantId: "acme",
+        observedAt: OBSERVED_AT,
+        runId: "pg:acme:Run:" + "0".repeat(32),
+        outputRef: "pg:acme:Output:" + "1".repeat(32),
+        text: "A claim.",
+        spanStart: 0,
+        spanEnd: 8,
+        material: true,
+      },
+      {
+        kind: "Output",
+        tenantId: "acme",
+        observedAt: OBSERVED_AT,
+        runId: "pg:acme:Run:" + "0".repeat(32),
+        contentHash: "sha256:out",
+        text: "An output.",
+        delivered: true,
+      },
+    ];
+
+    for (const sample of samples) {
+      const identity = new Set(Object.keys(identityFields(sample)));
+      for (const attribute of REDACTABLE_ATTRIBUTES[sample.kind]) {
+        expect(identity.has(attribute), `${sample.kind}.${attribute} is an identity field`).toBe(
+          false,
+        );
+      }
+    }
   });
 });
 

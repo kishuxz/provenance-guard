@@ -191,8 +191,14 @@ export type GraphNodeInput = GraphNode extends infer Node
  * a compile error rather than a silent leak.
  */
 export const REDACTABLE_ATTRIBUTES: Readonly<Record<NodeKind, readonly string[]>> = {
-  // A source URI routinely carries credentials in query parameters or userinfo.
-  Source: ["uri"],
+  // Not redactable, and deliberately so. `uri` is a Source identity field, so
+  // blanking it on export would leave the node's id un-derivable and every
+  // redacted export failing GRAPH_ID_MISMATCH. Credentials are handled at the
+  // other end instead: `stripCredentials` removes URI userinfo when the node is
+  // created, so the secret is never recorded rather than recorded and hidden.
+  // Every attribute listed below is a non-identity field, which is what lets a
+  // redacted export still validate.
+  Source: [],
   Run: [],
   Step: [],
   // Artifacts are recorded by hash and status only; there is no body to leak.
@@ -247,8 +253,10 @@ export function identityFields(node: GraphNodeInput): IdentityFields {
  * claim about identity, and the graph only records identity it derived itself.
  */
 export function createNode(input: GraphNodeInput): GraphNode {
-  const id = deriveGraphId(input.tenantId, input.kind, identityFields(input));
-  const candidate = { ...input, id, schemaVersion: GRAPH_SCHEMA_VERSION };
+  const normalized =
+    input.kind === "Source" ? { ...input, uri: stripCredentials(input.uri) } : input;
+  const id = deriveGraphId(normalized.tenantId, normalized.kind, identityFields(normalized));
+  const candidate = { ...normalized, id, schemaVersion: GRAPH_SCHEMA_VERSION };
 
   const parsed = GraphNodeSchema.safeParse(candidate);
   if (!parsed.success) {
@@ -260,6 +268,33 @@ export function createNode(input: GraphNodeInput): GraphNode {
   }
 
   return parsed.data;
+}
+
+/**
+ * Removes the userinfo component of a URI, so credentials are never recorded.
+ *
+ * Done at creation rather than at export because a secret that reaches storage
+ * has already leaked — an export filter only protects the copies that go
+ * through it, not the database, the logs, or a debugger.
+ *
+ * The query string is deliberately kept. It routinely distinguishes two
+ * genuinely different documents, and dropping it would collapse distinct
+ * sources onto one node: a correctness loss traded for a partial secrecy gain.
+ * A URI that is not parseable is returned unchanged rather than discarded,
+ * since a source we cannot parse is still a source we must record.
+ */
+export function stripCredentials(uri: string): string {
+  try {
+    const parsed = new URL(uri);
+    if (parsed.username === "" && parsed.password === "") {
+      return uri;
+    }
+    parsed.username = "";
+    parsed.password = "";
+    return parsed.toString();
+  } catch {
+    return uri;
+  }
 }
 
 /** Recomputes a node's ID from its own fields, for detecting tampering. */
