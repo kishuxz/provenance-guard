@@ -193,6 +193,7 @@ Node and edge IDs are deterministic: the same input produces the same graph on a
 | `@provguard/graph`    | Typed lineage graph: node and edge model, deterministic IDs, edge matrix   |
 | `@provguard/harness`  | The twenty-two deterministic scenarios and their difficulty metadata       |
 | `@provguard/cli`      | `check`, `bench`, `trace`, `explain`, `impact`, `graph validate`           |
+| `@provguard/neo4j`    | Optional Neo4j storage adapter. Nothing in the core depends on it          |
 | `@provguard/demo`     | Narrated stdout walkthrough of the D1 chain, guards off then on            |
 
 ## Verification
@@ -217,6 +218,7 @@ pnpm exec provguard bench --json
 | [docs/PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md)                     | User-visible behavior, public interfaces, and release criteria      |
 | [docs/GRAPH_ENGINEERING_PLAN.md](docs/GRAPH_ENGINEERING_PLAN.md) | Graph model, invariants, traversals, and storage rollout            |
 | [docs/AUTONOMOUS_EXECUTION.md](docs/AUTONOMOUS_EXECUTION.md)     | Work graph, agent loop, lane boundaries, and gates                  |
+| [docs/NEO4J.md](docs/NEO4J.md)                                   | The optional Neo4j adapter, its storage model and its limits        |
 | [AGENTS.md](AGENTS.md)                                           | The engineering contract every contributor and coding agent follows |
 
 ## License
