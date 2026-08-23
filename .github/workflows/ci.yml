@@ -44,7 +44,17 @@ jobs:
         run: pnpm format
 
       - name: Test
-        run: pnpm test
+        run: pnpm test --reporter=default --reporter=json --outputFile=test-results.json
+
+      # docs/PRODUCT_SPEC.md requires CI to publish benchmark and test
+      # evidence. A log that expires is not published evidence.
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: test-results
+          path: test-results.json
+          if-no-files-found: error
 
   bench:
     runs-on: ubuntu-latest
@@ -71,7 +81,22 @@ jobs:
         run: pnpm build
 
       - name: Bench
-        run: pnpm exec provguard bench
+        run: pnpm exec provguard bench --json | tee bench-table.txt
+
+      - name: Performance measurement
+        run: pnpm perf --json | tee perf-table.txt
+
+      - name: Upload benchmark and performance evidence
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: bench-results
+          path: |
+            bench-results.json
+            bench-table.txt
+            perf-results.json
+            perf-table.txt
+          if-no-files-found: error
 
   # The Neo4j adapter's tests skip when no database is reachable, so `verify`
   # stays green on a machine without Docker and the offline core requirement

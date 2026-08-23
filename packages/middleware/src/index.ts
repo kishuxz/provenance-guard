@@ -18,6 +18,8 @@ import type {
   Verdict,
 } from "@provguard/schema";
 
+import { safeSpan, type GuardTracer } from "./instrumentation.js";
+
 export type GuardMode = "monitor" | "enforce";
 
 export interface GuardOptions {
@@ -39,6 +41,12 @@ export interface GuardOptions {
   readonly judge?: JudgeHook;
   /** Pins the ledger observation time, for reproducible output. */
   readonly observedAt?: string;
+  /**
+   * Optional tracer. Absent means no spans and no cost; a tracer that throws
+   * is swallowed, because telemetry must not become a new way to fail in the
+   * request path.
+   */
+  readonly tracer?: GuardTracer;
 }
 
 export interface CandidateChunk {
@@ -116,6 +124,7 @@ export function createGuard(options: GuardOptions): Guard {
   const slot = resolveSlot(policy, slotName);
 
   const admitContext = (candidates: readonly CandidateChunk[]): AdmitResult => {
+    const span = safeSpan(options.tracer, "provguard.inbound");
     const decisions = candidates.map((candidate) => {
       const classified = classifyChunk(candidate.text, candidate.provenance);
       const chunk = candidate.id === undefined ? classified : { ...classified, id: candidate.id };
@@ -131,11 +140,20 @@ export function createGuard(options: GuardOptions): Guard {
       };
     });
 
-    return {
-      context: decisions.filter((decision) => !decision.refused).map((decision) => decision.chunk),
-      decisions,
-      mode: options.mode,
-    };
+    const context = decisions
+      .filter((decision) => !decision.refused)
+      .map((decision) => decision.chunk);
+
+    span.setAttribute("provguard.mode", options.mode);
+    span.setAttribute("provguard.chunks.candidates", decisions.length);
+    span.setAttribute("provguard.chunks.admitted", context.length);
+    span.setAttribute(
+      "provguard.chunks.would_refuse",
+      decisions.filter((decision) => decision.wouldRefuse).length,
+    );
+    span.end();
+
+    return { context, decisions, mode: options.mode };
   };
 
   return {
@@ -145,6 +163,7 @@ export function createGuard(options: GuardOptions): Guard {
 
     async run(candidates, output) {
       const admit = admitContext(candidates);
+      const span = safeSpan(options.tracer, "provguard.outbound");
 
       // Grounding is checked against the chunks that were genuinely admitted
       // under an enforcing policy, in both modes. Grounding a claim on a chunk
@@ -190,6 +209,16 @@ export function createGuard(options: GuardOptions): Guard {
         })),
       };
 
+      span.setAttribute("provguard.mode", options.mode);
+      span.setAttribute("provguard.decision", decision);
+      span.setAttribute("provguard.delivered", monitored || !blocked);
+      span.setAttribute("provguard.claims", audit.assessments.length);
+      span.setAttribute(
+        "provguard.reason_codes",
+        audit.verdict.reasons.map((reason) => reason.code).join(","),
+      );
+      span.end();
+
       return {
         decision,
         // Monitor mode delivers regardless. It prevents nothing, which is what
@@ -208,7 +237,9 @@ export function createGuard(options: GuardOptions): Guard {
 
 /** Convenience re-exports so a caller needs one import to use and inspect a run. */
 export { assembleContext, toCanonicalJSON, validateGraph };
+export { safeSpan } from "./instrumentation.js";
 export type { GraphInput, JudgeHook };
+export type { GuardSpan, GuardTracer, InstrumentationOptions } from "./instrumentation.js";
 
 function resolveSlot(policy: SlotPolicy, name: string): ContextSlot {
   const slot = policy.slots.find((candidate) => candidate.name === name);

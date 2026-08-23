@@ -14,6 +14,9 @@ importers:
       '@provguard/cli':
         specifier: workspace:*
         version: link:packages/cli
+      '@provguard/graph':
+        specifier: workspace:*
+        version: link:packages/graph
       '@types/node':
         specifier: ^24.3.0
         version: 24.13.3

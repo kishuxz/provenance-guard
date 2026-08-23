@@ -16,11 +16,13 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "test": "vitest run",
-    "format": "prettier --check ."
+    "format": "prettier --check .",
+    "perf": "node scripts/perf.mjs"
   },
   "devDependencies": {
-    "@provguard/cli": "workspace:*",
     "@eslint/js": "^9.33.0",
+    "@provguard/cli": "workspace:*",
+    "@provguard/graph": "workspace:*",
     "@types/node": "^24.3.0",
     "eslint": "^9.33.0",
     "prettier": "^3.6.2",
