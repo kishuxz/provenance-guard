@@ -120,7 +120,17 @@ export type ScenarioExpectation = z.infer<typeof ScenarioExpectationSchema>;
 export const ScenarioProvenanceSchema = z.enum(["derived", "constructed"]);
 export type ScenarioProvenance = z.infer<typeof ScenarioProvenanceSchema>;
 
-export const ScenarioDifficultySchema = z.enum(["basic", "hard"]);
+/**
+ * `basic` is pollution visible in the shape of the payload. `hard` is a
+ * near miss: well formed, correctly labelled, and wrong in what it means.
+ * `mixed` is one chunk carrying genuine data *and* pollution, which is what a
+ * real retrieval pipeline actually produces.
+ *
+ * Exported as an array so consumers can iterate rather than hardcode the tier
+ * names; adding a tier should not require editing every report builder.
+ */
+export const ScenarioDifficulties = ["basic", "hard", "mixed"] as const;
+export const ScenarioDifficultySchema = z.enum(ScenarioDifficulties);
 export type ScenarioDifficulty = z.infer<typeof ScenarioDifficultySchema>;
 
 export const ScenarioExpectedGateSchema = z.enum(["inbound", "outbound", "either"]);

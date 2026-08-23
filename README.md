@@ -44,49 +44,60 @@ $ echo $?
 
 ## Bench
 
-Twenty-two scenarios in two difficulty tiers: sixteen expected to block, six clean controls expected to pass. Every scenario is fixed data with no network and no live model call, so runs are byte-identical.
+Twenty-eight scenarios in three difficulty tiers: twenty expected to block, eight clean controls expected to pass. Every scenario is fixed data with no network and no live model call, so runs are byte-identical.
 
-The **basic** tier reproduces pollution that is visible in the shape of the payload — an error status, a truncated body, an empty result, a channel that was never a data source. The **hard** tier is the near-miss set: every payload is well formed, carries a data channel and a healthy tier, and reports success, and every fabricated output reuses the vocabulary of its context. There is nothing for signature detection to fire on. The hard tier exists to keep the bench from being saturated, and it is not saturated — **five of its eight block-scenarios currently fail.**
+The **basic** tier reproduces pollution that is visible in the shape of the payload — an error status, a truncated body, an empty result, a channel that was never a data source. The **hard** tier is the near-miss set: every payload is well formed, carries a data channel and a healthy tier, and reports success, and every fabricated output reuses the vocabulary of its context. The **mixed** tier is one chunk carrying genuine data _and_ pollution — a partial write that left an error appended to a real document, a payload whose last record is cut off mid-value, a log excerpt with a stack trace between two real rows. That is what a retrieval pipeline actually produces, and until recently nothing tested it.
+
+Neither the hard nor the mixed tier is saturated: **five of the hard tier's eight block-scenarios fail, and two of the mixed tier's four.** Those failures are the most useful thing in the table.
 
 ```
-id                               difficulty  provenance   expected      actual  pass  expected_gate  actual_gate  reason                     stage     guards_disabled  shape_check
-stdout-capture                   basic       derived      should_block  block   pass  inbound        inbound      UPSTREAM_STATUS_NOT_OK     inbound   miss             miss
-http-error-body                  basic       constructed  should_block  block   pass  inbound        inbound      UPSTREAM_STATUS_NOT_OK     inbound   miss             miss
-alert-in-history                 basic       derived      should_block  block   pass  inbound        inbound      CHANNEL_NOT_PERMITTED      inbound   miss             miss
-truncated-json                   basic       derived      should_block  block   pass  inbound        inbound      PAYLOAD_TRUNCATED          inbound   miss             miss
-mechanical-fallback              basic       derived      should_block  block   pass  inbound        inbound      TIER_BELOW_MINIMUM         inbound   miss             miss
-unlabeled-enrichment             basic       derived      should_block  block   pass  inbound        inbound      CHANNEL_NOT_PERMITTED      inbound   miss             miss
-stale-cache                      basic       constructed  should_block  block   pass  inbound        inbound      CHANNEL_NOT_PERMITTED      inbound   miss             miss
-empty-not-denied                 basic       derived      should_block  block   pass  inbound        inbound      PAYLOAD_EMPTY              inbound   miss             miss
-clean-labeled-retrieval          basic       constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
-clean-authorized-empty           basic       constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
-hard-paraphrased-fabrication     hard        constructed  should_block  allow   fail  outbound       none         -                          none      miss             miss
-hard-recombined-entities         hard        constructed  should_block  allow   fail  outbound       none         -                          none      miss             miss
-hard-split-conjunction           hard        constructed  should_block  block   pass  outbound       outbound     CLAIM_UNVERIFIABLE         outbound  miss             miss
-hard-unit-shift                  hard        constructed  should_block  allow   fail  outbound       none         -                          none      miss             miss
-hard-appended-qualifier          hard        constructed  should_block  allow   fail  outbound       none         -                          none      miss             miss
-hard-ok-status-error-body        hard        constructed  should_block  block   pass  inbound        inbound      PROVENANCE_LABEL_MISMATCH  inbound   miss             miss
-hard-fresh-timestamp-stale-body  hard        constructed  should_block  allow   fail  inbound        none         -                          none      miss             miss
-hard-json-shaped-diagnostic      hard        constructed  should_block  block   pass  inbound        inbound      RESULT_DEGRADED            inbound   miss             miss
-hard-clean-error-vocabulary      hard        constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
-hard-clean-t3-support            hard        constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
-hard-clean-entity-overlap        hard        constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
-hard-clean-authorized-empty      hard        constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
+id                                  difficulty  provenance   expected      actual  pass  expected_gate  actual_gate  reason                     stage     guards_disabled  shape_check
+stdout-capture                      basic       derived      should_block  block   pass  inbound        inbound      UPSTREAM_STATUS_NOT_OK     inbound   miss             miss
+http-error-body                     basic       constructed  should_block  block   pass  inbound        inbound      UPSTREAM_STATUS_NOT_OK     inbound   miss             miss
+alert-in-history                    basic       derived      should_block  block   pass  inbound        inbound      CHANNEL_NOT_PERMITTED      inbound   miss             miss
+truncated-json                      basic       derived      should_block  block   pass  inbound        inbound      PAYLOAD_TRUNCATED          inbound   miss             miss
+mechanical-fallback                 basic       derived      should_block  block   pass  inbound        inbound      TIER_BELOW_MINIMUM         inbound   miss             miss
+unlabeled-enrichment                basic       derived      should_block  block   pass  inbound        inbound      CHANNEL_NOT_PERMITTED      inbound   miss             miss
+stale-cache                         basic       constructed  should_block  block   pass  inbound        inbound      CHANNEL_NOT_PERMITTED      inbound   miss             miss
+empty-not-denied                    basic       derived      should_block  block   pass  inbound        inbound      PAYLOAD_EMPTY              inbound   miss             miss
+clean-labeled-retrieval             basic       constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
+clean-authorized-empty              basic       constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
+hard-paraphrased-fabrication        hard        constructed  should_block  allow   fail  outbound       none         -                          none      miss             miss
+hard-recombined-entities            hard        constructed  should_block  allow   fail  outbound       none         -                          none      miss             miss
+hard-split-conjunction              hard        constructed  should_block  block   pass  outbound       outbound     CLAIM_UNVERIFIABLE         outbound  miss             miss
+hard-unit-shift                     hard        constructed  should_block  allow   fail  outbound       none         -                          none      miss             miss
+hard-appended-qualifier             hard        constructed  should_block  allow   fail  outbound       none         -                          none      miss             miss
+hard-ok-status-error-body           hard        constructed  should_block  block   pass  inbound        inbound      PROVENANCE_LABEL_MISMATCH  inbound   miss             miss
+hard-fresh-timestamp-stale-body     hard        constructed  should_block  allow   fail  inbound        none         -                          none      miss             miss
+hard-json-shaped-diagnostic         hard        constructed  should_block  block   pass  inbound        inbound      RESULT_DEGRADED            inbound   miss             miss
+hard-clean-error-vocabulary         hard        constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
+hard-clean-t3-support               hard        constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
+hard-clean-entity-overlap           hard        constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
+hard-clean-authorized-empty         hard        constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
+mixed-error-appended-to-document    mixed       constructed  should_block  allow   fail  either         none         -                          none      miss             miss
+mixed-truncated-tail                mixed       constructed  should_block  block   pass  either         inbound      PAYLOAD_TRUNCATED          inbound   miss             miss
+mixed-diagnostic-interleaved        mixed       constructed  should_block  block   pass  either         inbound      PROVENANCE_LABEL_MISMATCH  inbound   miss             miss
+mixed-cross-sentence-both-grounded  mixed       constructed  should_block  allow   fail  outbound       none         -                          none      miss             miss
+mixed-clean-quoted-error            mixed       constructed  should_allow  block   fail  either         outbound     CLAIM_UNGROUNDED           outbound  miss             miss
+mixed-clean-multi-record            mixed       constructed  should_allow  allow   pass  either         none         -                          none      miss             miss
 
 recall on block scenarios:
   basic derived: 6/6 (100.0%)
   basic constructed: 2/2 (100.0%)
   hard derived: n/a (0 scenarios)
   hard constructed: 3/8 (37.5%)
+  mixed derived: n/a (0 scenarios)
+  mixed constructed: 2/4 (50.0%)
 false-positive rate on controls:
   basic: 0/2 (0.0%)
   hard: 0/4 (0.0%)
+  mixed: 1/2 (50.0%)
 outbound gate validations: 1
-expected gate breakdown: inbound=11, outbound=5, either=6
-actual gate breakdown: inbound=10, outbound=1, none=11
-expected->actual gate breakdown: inbound->inbound=10, either->none=6, outbound->none=4, outbound->outbound=1, inbound->none=1
-stage breakdown: inbound=10, outbound=1
-reason breakdown: UPSTREAM_STATUS_NOT_OK=2, CHANNEL_NOT_PERMITTED=3, PAYLOAD_TRUNCATED=1, TIER_BELOW_MINIMUM=1, PAYLOAD_EMPTY=1, CLAIM_UNVERIFIABLE=1, PROVENANCE_LABEL_MISMATCH=1, RESULT_DEGRADED=1
+expected gate breakdown: inbound=11, outbound=6, either=11
+actual gate breakdown: inbound=12, outbound=2, none=14
+expected->actual gate breakdown: inbound->inbound=10, either->none=8, outbound->none=5, outbound->outbound=1, inbound->none=1, either->inbound=2, either->outbound=1
+stage breakdown: inbound=12, outbound=2
+reason breakdown: UPSTREAM_STATUS_NOT_OK=2, CHANNEL_NOT_PERMITTED=3, PAYLOAD_TRUNCATED=2, TIER_BELOW_MINIMUM=1, PAYLOAD_EMPTY=1, CLAIM_UNVERIFIABLE=1, PROVENANCE_LABEL_MISMATCH=2, RESULT_DEGRADED=1, CLAIM_UNGROUNDED=1
 disabled baseline catches: 0
 shape-check baseline catches: 0
 
@@ -98,9 +109,9 @@ Saturation warning: basic constructed recall is 100% with only 2 scenarios; this
 Five things in that table are worth reading carefully:
 
 - **Five hard scenarios fail, and they are the interesting rows.** `hard-paraphrased-fabrication`, `hard-recombined-entities`, `hard-unit-shift`, and `hard-appended-qualifier` all defeat the outbound gate the same way: every entity and number in the fabricated claim really does appear in context, so a check that asks _whether the pieces are present_ is satisfied by an assertion that inverts, re-periodizes, or extends what context actually says. Grounding by overlap cannot see relational meaning. `hard-fresh-timestamp-stale-body` defeats the inbound gate because nothing currently checks whether a document's content is as fresh as its `retrievedAt`. These are recorded gaps, not pending fixes hidden behind a green table.
-- **Both baselines catch zero, on all twenty-two.** With the guards disabled, nothing is caught, which is what the pipeline does today. The shape-check baseline is what a normal test suite checks: output is non-empty and JSON parses. It also catches zero of the sixteen. Every polluted output above is a non-empty, well-formed string. Shape tells you nothing about provenance.
-- **`expected_gate` vs `actual_gate` is the honest column.** Every scenario declares which gate _should_ have caught it. Ten of eleven inbound-expected scenarios were caught inbound; one of five outbound-expected scenarios was caught outbound. The outbound gate is under-exercised as an independent catcher, and the table says so rather than absorbing the result into a single rate.
-- **Zero false positives on six controls** is six data points. It is not a false-positive rate. Four of those controls are deliberately adversarial — clean text about error handling, clean text with heavy entity overlap — because over-blocking legitimate diagnostic-sounding content is this design's most likely real failure.
+- **Both baselines catch zero, on all twenty-eight.** With the guards disabled, nothing is caught, which is what the pipeline does today. The shape-check baseline is what a normal test suite checks: output is non-empty and JSON parses. It also catches zero of the twenty. Every polluted output above is a non-empty, well-formed string. Shape tells you nothing about provenance.
+- **`expected_gate` vs `actual_gate` is the honest column.** Every scenario declares which gate _should_ have caught it. Ten of eleven inbound-expected scenarios were caught inbound; one of six outbound-expected scenarios was caught outbound. The outbound gate remains under-exercised as an independent catcher, and the table says so rather than absorbing the result into a single rate.
+- **There is now a measured false positive, and it is the one that was predicted.** `mixed-clean-quoted-error` is a genuine incident postmortem that quotes `HTTP/1.1 503 Service Unavailable` because that is what the incident was. It is **blocked**, with `CLAIM_UNGROUNDED` at the outbound gate. `docs/LIMITATIONS.md` named this exact failure — "an incident postmortem quoting a stack trace, a support ticket pasting an HTTP error" — before any scenario exercised it. The mixed-tier false-positive rate is 1/2. Two controls is not a rate, but one confirmed false positive is a confirmed false positive, and it is the number in this table most likely to matter to you.
 - **The saturation warning is emitted by the bench itself**, not written into this README by hand. When a tier reaches 100% on a small denominator, the report says the number detects regressions and does not measure adequacy.
 
 ## Quickstart

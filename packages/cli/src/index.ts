@@ -3,6 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 import process from "node:process";
 
+import { ScenarioDifficulties } from "@provguard/schema";
 import type {
   Scenario,
   ScenarioDifficulty,
@@ -342,58 +343,53 @@ function summarizeBench(results: BenchScenarioResult[]): BenchSummary {
   };
 }
 
+/**
+ * Built by iterating the difficulty enum rather than naming tiers.
+ *
+ * Adding a tier used to mean editing this function, the false-positive
+ * builder, and both formatters, with nothing to catch a tier left out of one
+ * of them. Now a new tier appears everywhere or nowhere.
+ */
 function buildRecallRates(
   shouldBlock: BenchScenarioResult[],
 ): Record<ScenarioDifficulty, Record<ScenarioProvenance, BenchRate>> {
-  return {
-    basic: {
+  const rates = {} as Record<ScenarioDifficulty, Record<ScenarioProvenance, BenchRate>>;
+
+  for (const difficulty of ScenarioDifficulties) {
+    rates[difficulty] = {
       derived: recallRate(
-        "basic",
+        difficulty,
         "derived",
         shouldBlock.filter(
-          (result) => result.difficulty === "basic" && result.provenance === "derived",
+          (result) => result.difficulty === difficulty && result.provenance === "derived",
         ),
       ),
       constructed: recallRate(
-        "basic",
+        difficulty,
         "constructed",
         shouldBlock.filter(
-          (result) => result.difficulty === "basic" && result.provenance === "constructed",
+          (result) => result.difficulty === difficulty && result.provenance === "constructed",
         ),
       ),
-    },
-    hard: {
-      derived: recallRate(
-        "hard",
-        "derived",
-        shouldBlock.filter(
-          (result) => result.difficulty === "hard" && result.provenance === "derived",
-        ),
-      ),
-      constructed: recallRate(
-        "hard",
-        "constructed",
-        shouldBlock.filter(
-          (result) => result.difficulty === "hard" && result.provenance === "constructed",
-        ),
-      ),
-    },
-  };
+    };
+  }
+
+  return rates;
 }
 
 function buildFalsePositiveRates(
   controls: BenchScenarioResult[],
 ): Record<ScenarioDifficulty, BenchRate> {
-  return {
-    basic: falsePositiveRate(
-      "basic",
-      controls.filter((result) => result.difficulty === "basic"),
-    ),
-    hard: falsePositiveRate(
-      "hard",
-      controls.filter((result) => result.difficulty === "hard"),
-    ),
-  };
+  const rates = {} as Record<ScenarioDifficulty, BenchRate>;
+
+  for (const difficulty of ScenarioDifficulties) {
+    rates[difficulty] = falsePositiveRate(
+      difficulty,
+      controls.filter((result) => result.difficulty === difficulty),
+    );
+  }
+
+  return rates;
 }
 
 function buildGateBreakdown(results: BenchScenarioResult[]): BenchGateBreakdown {
@@ -745,7 +741,13 @@ async function runBenchCommand(flags: { monitor: boolean; json: boolean }): Prom
     await writeFile("bench-results.json", `${JSON.stringify(result, null, 2)}\n`);
   }
 
-  return result.scenarios.every((scenario) => scenario.difficulty === "hard" || scenario.passed)
+  // Only the basic tier gates. `hard` and `mixed` are measurement tiers that
+  // are expected to contain failures -- those failures are the most useful
+  // thing the bench produces, and a command that exits non-zero on them could
+  // not be run in CI without either being ignored or being "fixed" by deleting
+  // the scenarios that fail. The regression gate for those tiers is `pnpm
+  // test`, which pins their rates.
+  return result.scenarios.every((scenario) => scenario.difficulty !== "basic" || scenario.passed)
     ? 0
     : 1;
 }
@@ -841,16 +843,14 @@ function formatRows(rows: string[][]): string[] {
 }
 
 function formatRecallRows(rates: BenchSummary["recall"]): string[] {
-  return [
-    `  basic derived: ${rates.basic.derived.label}`,
-    `  basic constructed: ${rates.basic.constructed.label}`,
-    `  hard derived: ${rates.hard.derived.label}`,
-    `  hard constructed: ${rates.hard.constructed.label}`,
-  ];
+  return ScenarioDifficulties.flatMap((difficulty) => [
+    `  ${difficulty} derived: ${rates[difficulty].derived.label}`,
+    `  ${difficulty} constructed: ${rates[difficulty].constructed.label}`,
+  ]);
 }
 
 function formatFalsePositiveRows(rates: BenchSummary["falsePositiveRate"]): string[] {
-  return [`  basic: ${rates.basic.label}`, `  hard: ${rates.hard.label}`];
+  return ScenarioDifficulties.map((difficulty) => `  ${difficulty}: ${rates[difficulty].label}`);
 }
 
 function formatSaturationWarnings(warnings: string[]): string[] {

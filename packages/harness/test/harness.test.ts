@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ScenarioDifficulties } from "@provguard/schema";
 import type { Chunk, Claim, GuardPair, Verdict } from "@provguard/schema";
 import { SCENARIOS, getScenario, listScenarios, runScenario } from "../src/index.js";
 
@@ -108,7 +109,7 @@ describe("SCENARIOS", () => {
     for (const scenario of SCENARIOS) {
       expect(["derived", "constructed"]).toContain(scenario.provenance);
       expect(scenario.sourceNote, scenario.id).toContain(scenario.provenance);
-      expect(["basic", "hard"]).toContain(scenario.difficulty);
+      expect(ScenarioDifficulties as readonly string[]).toContain(scenario.difficulty);
       expect(["inbound", "outbound", "either"]).toContain(scenario.expectedGate);
     }
   });
