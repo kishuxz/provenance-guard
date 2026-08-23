@@ -478,6 +478,15 @@ function checkSupportFromBlockedChunks(
  * verdict names the exact immutable policy version that permitted the delivery,
  * so an exception is always attributable. A boolean would let an unsupported
  * claim be waved through with nothing recording who decided that.
+ *
+ * A monitored verdict counts as a recorded explanation too. In monitor mode an
+ * unsupported claim is delivered by design — that is what monitor mode is — and
+ * the ledger is not corrupt for saying so: it records both that the claim
+ * reached the user and that a named policy version blocked it without
+ * enforcement. Treating that as invalid would mark every monitor-mode run
+ * broken, which is the rollout path docs/LIMITATIONS.md recommends. The
+ * unsupported delivery is a finding for monitor reporting, not a defect in the
+ * record of it. This is the same reasoning applied to invariant 4 above.
  */
 function checkDeliveredClaimsAreSupported(
   edges: readonly GraphEdge[],
@@ -491,10 +500,13 @@ function checkDeliveredClaimsAreSupported(
     }
   }
 
-  const allowedByPolicy = new Set<string>();
+  const explainedByPolicy = new Set<string>();
   for (const node of nodesById.values()) {
-    if (node.kind === "Verdict" && node.decision === "allow") {
-      allowedByPolicy.add(node.targetRef);
+    if (node.kind !== "Verdict") {
+      continue;
+    }
+    if (node.decision === "allow" || node.monitored) {
+      explainedByPolicy.add(node.targetRef);
     }
   }
 
@@ -508,7 +520,7 @@ function checkDeliveredClaimsAreSupported(
       continue;
     }
 
-    if (supported.has(node.id) || allowedByPolicy.has(node.id)) {
+    if (supported.has(node.id) || explainedByPolicy.has(node.id)) {
       continue;
     }
 

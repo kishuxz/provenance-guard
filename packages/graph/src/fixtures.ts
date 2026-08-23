@@ -529,6 +529,52 @@ export function graphFixtures(): readonly GraphFixture[] {
   }
 
   {
+    // The baseline with support removed and its allowing verdict replaced by a
+    // monitored block: an unsupported material claim delivered because the
+    // policy was not in force. That is what monitor mode is, and the ledger
+    // records both halves of it.
+    const graph = withoutEdgeType(baselineGraph(), "SUPPORTED_BY");
+    const claim = node(graph, "Claim");
+    const policy = node(graph, "Policy");
+    const original = node(graph, "Verdict");
+
+    const monitoredBlock = createNode({
+      kind: "Verdict",
+      tenantId: TENANT,
+      observedAt: AT,
+      runId: node(graph, "Run").id,
+      targetRef: claim.id,
+      policyRef: policy.id,
+      decision: "block",
+      reasonCodes: ["CLAIM_UNGROUNDED"],
+      method: "deterministic",
+      monitored: true,
+      decidedAt: AT,
+      inputHash: "sha256:input-3",
+    });
+
+    fixtures.push({
+      id: "near-miss-monitor-mode-unsupported-delivery",
+      description:
+        "An unsupported material claim delivered under a monitor-mode policy that recorded the block. The delivery is explained, so the record is coherent.",
+      expectedCodes: [],
+      graph: {
+        nodes: [...graph.nodes.filter((candidate) => candidate.id !== original.id), monitoredBlock],
+        edges: [
+          ...graph.edges.filter((edge) => edge.from !== original.id),
+          createEdge({
+            tenantId: TENANT,
+            type: "DECIDES",
+            from: monitoredBlock.id,
+            to: claim.id,
+            observedAt: AT,
+          }),
+        ],
+      },
+    });
+  }
+
+  {
     const graph = baselineGraph();
     const chunk = node(graph, "Chunk");
     const policy = node(graph, "Policy");
