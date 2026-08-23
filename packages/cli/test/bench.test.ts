@@ -205,6 +205,64 @@ describe("provguard bench", () => {
     expect(result.summary.recall.mixed.constructed.label).toBe("2/4 (50.0%)");
   });
 
+  it("executes the disabled control once per scenario", async () => {
+    // The assertion that stops a zero-result loop that never ran from looking
+    // identical to a loop that ran and found nothing.
+    const result = await runBench();
+
+    expect(result.summary.controlInvocations).toBe(result.scenarios.length);
+    expect(result.summary.controlInvocations).toBe(28);
+  });
+
+  it("derives guard effect from execution, not from the declared expectation", async () => {
+    // Every scenario below is declared should_block. The guards catch some and
+    // miss others, and guard_effect follows what actually happened. If it were
+    // read off the declaration, all of these would say "changed".
+    const result = await runBench();
+    const caught = result.scenarios.find((s) => s.id === "stdout-capture");
+    const missed = result.scenarios.find((s) => s.id === "mixed-cross-sentence-both-grounded");
+
+    expect(caught?.expected).toBe("should_block");
+    expect(missed?.expected).toBe("should_block");
+    expect(caught?.guardEffect).toBe("changed");
+    expect(missed?.guardEffect).toBe("none");
+  });
+
+  it("reports a guard effect that actually varies across the corpus", async () => {
+    // A constant column is a decorative column. This is the check that would
+    // have failed on the hardcoded baseline this replaced.
+    const effects = new Set((await runBench()).scenarios.map((s) => s.guardEffect));
+
+    expect([...effects].sort()).toEqual(["changed", "none"]);
+  });
+
+  it("measures the differential rather than counting what the control caught", async () => {
+    const result = await runBench();
+
+    // 13 of 20 block scenarios had their outcome changed by the guards.
+    expect(result.summary.guardChangedOutcome.label).toBe("13/20 (65.0%)");
+    // And the summary carries no hardcoded baseline field any more.
+    expect(result.summary).not.toHaveProperty("disabledBaselineCatches");
+  });
+
+  it("runs the control with the guards genuinely bypassed", async () => {
+    // Under the control every chunk reaches context, including ones the real
+    // inbound guard refuses. If the control were secretly running the real
+    // guard, a refused-chunk scenario would admit zero.
+    const result = await runBench();
+    const polluted = result.scenarios.find((s) => s.id === "stdout-capture");
+
+    expect(polluted?.control).toBe("delivered");
+    expect(polluted?.controlAdmittedChunks).toBeGreaterThan(0);
+  });
+
+  it("labels the by-construction statement as not measured", async () => {
+    const table = formatBenchTable(await runBench());
+
+    expect(table).toContain("not measured, true by construction");
+    expect(table).not.toContain("disabled baseline catches");
+  });
+
   it("keeps monitor mode from blocking delivery while preserving would-block results", async () => {
     const result = await runBench({ monitor: true });
 
