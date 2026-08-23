@@ -219,6 +219,7 @@ pnpm exec provguard bench --json
 | [docs/PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md)                     | User-visible behavior, public interfaces, and release criteria      |
 | [docs/GRAPH_ENGINEERING_PLAN.md](docs/GRAPH_ENGINEERING_PLAN.md) | Graph model, invariants, traversals, and storage rollout            |
 | [docs/AUTONOMOUS_EXECUTION.md](docs/AUTONOMOUS_EXECUTION.md)     | Work graph, agent loop, lane boundaries, and gates                  |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md)                       | What was measured, on what fixture, on which machine                |
 | [docs/NEO4J.md](docs/NEO4J.md)                                   | The optional Neo4j adapter, its storage model and its limits        |
 | [AGENTS.md](AGENTS.md)                                           | The engineering contract every contributor and coding agent follows |
 

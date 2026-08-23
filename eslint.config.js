@@ -8,6 +8,14 @@ export default tseslint.config(
     ignores: ["**/dist/**", "node_modules/**", ".context/**"],
   },
   {
+    // Node scripts run under Node, so they get Node globals. Without this
+    // eslint flags `console` and `process` as undefined.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: { console: "readonly", process: "readonly" },
+    },
+  },
+  {
     files: ["**/*.ts"],
     languageOptions: {
       parserOptions: {

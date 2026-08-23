@@ -119,3 +119,11 @@ export {
   type GraphEdge,
   type GraphEdgeInput,
 } from "./edges.js";
+
+export {
+  measure,
+  perfFixture,
+  type PerfFixture,
+  type PerfMeasurement,
+  type PerfReport,
+} from "./perf.js";
