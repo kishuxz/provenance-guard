@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 
 import {
@@ -45,6 +46,30 @@ type Outcome = "allow" | "block";
 type GuardStage = "inbound" | "outbound" | "none";
 type BaselineOutcome = "catch" | "miss";
 type ControlOutcome = "delivered" | "withheld";
+
+/**
+ * What a control execution must hand back to prove it processed the scenario.
+ *
+ * Every field is derived from the input. An invocation counter proves a
+ * function was called; this proves it read the chunks it was given, in order,
+ * without altering them. That distinction is the whole point: the previous
+ * design was satisfied by `controlInvocations += 1; return CONSTANT`.
+ */
+export interface ControlEvidence {
+  readonly scenarioId: string;
+  readonly control: ControlOutcome;
+  readonly chunkCount: number;
+  /** Delivered chunk ids, in delivery order. */
+  readonly chunkIds: readonly string[];
+  /** Hash of each delivered chunk's text, in delivery order. */
+  readonly contentHashes: readonly string[];
+  /** `channel:tier` for each delivered chunk, in delivery order. */
+  readonly provenanceLabels: readonly string[];
+  readonly outputHash: string;
+}
+
+/** A control implementation. Injectable so the suite can test broken ones. */
+export type DisabledControl = (runtime: Runtime, scenario: Scenario) => ControlEvidence;
 /** Whether the guard changed this scenario's outcome versus the executed control. */
 type GuardEffect = "changed" | "none";
 type RateKind = "recall" | "false_positive";
@@ -242,13 +267,16 @@ export async function runCheckFile(
   });
 }
 
-export async function runBench(options: { monitor?: boolean } = {}): Promise<BenchResult> {
+export async function runBench(
+  options: { monitor?: boolean; control?: DisabledControl } = {},
+): Promise<BenchResult> {
   const runtime = await loadRuntime();
   resetControlInvocations();
+  const control = options.control ?? defaultDisabledControl;
   const monitor = options.monitor ?? false;
   const scenarios = runtime.harness
     .listScenarios()
-    .map((scenario) => runBenchScenario(runtime, scenario, monitor));
+    .map((scenario) => runBenchScenario(runtime, scenario, monitor, control));
 
   return {
     monitor,
@@ -383,12 +411,12 @@ function disabledRuntime(runtime: Runtime): Runtime {
  * The question is whether the pollution actually reaches context and the output
  * actually ships, which is a property of the scenario and can be false.
  */
-function runDisabledControl(
-  runtime: Runtime,
-  scenario: Scenario,
-): { control: ControlOutcome; admittedChunks: number } {
-  controlInvocations += 1;
+function hashText(value: string): string {
+  return createHash("sha256").update(value).digest("hex").slice(0, 16);
+}
 
+/** The real control: runs the scenario through a bypassed pipeline. */
+export const defaultDisabledControl: DisabledControl = (runtime, scenario) => {
   const pipeline = runPipeline(
     disabledRuntime(runtime),
     scenario.chunks.map((chunk) => ({
@@ -401,15 +429,91 @@ function runDisabledControl(
   );
 
   return {
+    scenarioId: scenario.id,
     control: pipeline.wouldBlock ? "withheld" : "delivered",
-    admittedChunks: pipeline.deliveredChunks.length,
+    chunkCount: pipeline.deliveredChunks.length,
+    chunkIds: pipeline.deliveredChunks.map((chunk) => chunk.id),
+    contentHashes: pipeline.deliveredChunks.map((chunk) => hashText(chunk.text)),
+    provenanceLabels: pipeline.deliveredChunks.map(
+      (chunk) => `${chunk.provenance.channel}:${chunk.provenance.tier}`,
+    ),
+    outputHash: hashText(pipeline.output),
   };
+};
+
+/**
+ * Rejects any control whose output does not correspond to its input.
+ *
+ * Runs inside the benchmark on **every** execution, not only in tests. A check
+ * that lives only in the test suite can be bypassed by changing the
+ * implementation without running it; this way the benchmark refuses to report a
+ * number it could not verify.
+ *
+ * The control contract: an unguarded pipeline admits every chunk and alters
+ * nothing. Any deviation means a differential was measured against a control
+ * that did not run, which is not a measurement.
+ */
+export function verifyControlEvidence(scenario: Scenario, evidence: ControlEvidence): void {
+  const fail = (detail: string): never => {
+    throw new Error(
+      `disabled control produced evidence inconsistent with scenario ${scenario.id}: ${detail}`,
+    );
+  };
+
+  if (evidence.scenarioId !== scenario.id) {
+    fail(`reported scenario ${evidence.scenarioId}`);
+  }
+
+  const expectedIds = scenario.chunks.map((chunk) => chunk.id);
+  const expectedHashes = scenario.chunks.map((chunk) => hashText(chunk.text));
+
+  if (evidence.chunkCount !== scenario.chunks.length) {
+    fail(`saw ${evidence.chunkCount} chunks, scenario supplies ${scenario.chunks.length}`);
+  }
+
+  if (evidence.chunkIds.length !== expectedIds.length) {
+    fail(`reported ${evidence.chunkIds.length} chunk ids for ${expectedIds.length} chunks`);
+  }
+
+  // Order matters: chunk ordinal is part of graph identity, and a control that
+  // reorders is not reproducing the pipeline it stands in for.
+  for (const [index, id] of expectedIds.entries()) {
+    if (evidence.chunkIds[index] !== id) {
+      fail(`chunk ${index} is ${String(evidence.chunkIds[index])}, expected ${id}`);
+    }
+  }
+
+  for (const [index, hash] of expectedHashes.entries()) {
+    if (evidence.contentHashes[index] !== hash) {
+      fail(`chunk ${index} content was altered in transit`);
+    }
+  }
+
+  if (evidence.provenanceLabels.length !== expectedIds.length) {
+    fail(`reported ${evidence.provenanceLabels.length} provenance labels`);
+  }
+
+  for (const [index, label] of evidence.provenanceLabels.entries()) {
+    if (!/^[A-Z_]+:T[1-5]$/.test(label)) {
+      fail(`chunk ${index} has an unusable provenance label ${JSON.stringify(label)}`);
+    }
+  }
+
+  if (evidence.outputHash !== hashText(scenario.simulatedOutput)) {
+    fail("output was altered in transit");
+  }
+
+  // Bypass semantics: with the guards off, nothing is withheld.
+  if (evidence.control !== "delivered") {
+    fail(`reported ${evidence.control}, but an unguarded pipeline withholds nothing`);
+  }
 }
 
 function runBenchScenario(
   runtime: Runtime,
   scenario: Scenario,
   monitor: boolean,
+  control: DisabledControl,
 ): BenchScenarioResult {
   const pipeline = runPipeline(
     runtime,
@@ -423,7 +527,10 @@ function runBenchScenario(
   );
   const expectedOutcome = scenario.expectation === "should_block" ? "block" : "allow";
   const actual = monitor ? "allow" : pipeline.outcome;
-  const { control, admittedChunks } = runDisabledControl(runtime, scenario);
+  controlInvocations += 1;
+  const evidence = control(runtime, scenario);
+  // Verified before it is allowed to influence any reported number.
+  verifyControlEvidence(scenario, evidence);
 
   return {
     id: scenario.id,
@@ -436,11 +543,11 @@ function runBenchScenario(
     passed: pipeline.outcome === expectedOutcome,
     stage: pipeline.stage,
     reasonCode: pipeline.reasonCode,
-    control,
-    controlAdmittedChunks: admittedChunks,
+    control: evidence.control,
+    controlAdmittedChunks: evidence.chunkCount,
     // Measured both ways, then compared. Not derived from the scenario's
     // declared expectation.
-    guardEffect: pipeline.wouldBlock === (control === "withheld") ? "none" : "changed",
+    guardEffect: pipeline.wouldBlock === (evidence.control === "withheld") ? "none" : "changed",
     shapeBaseline: shapeCheckCatches(scenario.simulatedOutput) ? "catch" : "miss",
     wouldBlock: pipeline.wouldBlock,
   };

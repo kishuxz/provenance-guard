@@ -111,7 +111,9 @@ false-positive rate on controls:
   mixed: 1/2 (50.0%)
 ```
 
-Guards against regression: invocation count asserted equal to the scenario count (28); a test asserting `guard_effect` takes **both** values; a test asserting it is execution-derived by comparing two scenarios both declared `should_block` where one reports `changed` and one `none`; a test asserting the summary no longer carries `disabledBaselineCatches`.
+**Correction (second remediation pass).** This report previously claimed "an invocation-count assertion, so a loop that executes nothing cannot report a clean result." **That was false.** A control could increment the counter and return a constant, and all 15 benchmark tests passed — see `docs/ADVERSARIAL_TEST_LOG.md`. A counter proves a function was called, not that it processed input. Repaired in B3: the control now returns evidence derived from the scenario (id, chunk count, chunk ids in order, content hashes, provenance labels, output hash) and the benchmark verifies it field by field on every execution, refusing to report a number it could not verify.
+
+Guards against regression: control evidence verified against the scenario on every execution; a test asserting `guard_effect` takes **both** values; a test asserting it is execution-derived by comparing two scenarios both declared `should_block` where one reports `changed` and one `none`; a test asserting the summary no longer carries `disabledBaselineCatches`.
 
 `hard-split-conjunction` still blocks via `CLAIM_UNVERIFIABLE` rather than by detecting the fabricated causal relationship. `mixed-clean-quoted-error` remains a confirmed false positive.
 
