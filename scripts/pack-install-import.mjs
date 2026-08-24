@@ -182,7 +182,140 @@ for (const entry of packages) {
   }
 }
 
-console.log("\nInstalling tarballs into an empty consumer project\n");
+// ---------------------------------------------------------------------------
+// Solo consumers first.
+//
+// The shared consumer below installs all nine tarballs together, which lets a
+// dependency declared by one package satisfy an undeclared import in another:
+// deleting `zod` from @provguard/schema still passed, because @provguard/graph
+// declared it and it hoisted. That is HIGH-1's class of mistake -- verification
+// that does not match how a real consumer installs -- inside the verifier built
+// to fix HIGH-1.
+//
+// Each package therefore gets its own empty project, where only its own
+// manifest can supply its runtime dependencies.
+// ---------------------------------------------------------------------------
+console.log("\nInstalling each package ALONE, in its own empty consumer\n");
+
+for (const entry of packed) {
+  const name = entry.manifest.name;
+  const solo = join(workspace, "solo", name.replace("@provguard/", ""));
+  mkdirSync(solo, { recursive: true });
+
+  // Sibling @provguard packages resolve to local tarballs, because they are
+  // genuinely part of this release. Everything else must come from the
+  // package's own dependencies.
+  const siblingOverrides = Object.fromEntries(
+    packed.map((other) => [other.manifest.name, `file:${other.tarball}`]),
+  );
+
+  writeFileSync(
+    join(solo, "package.json"),
+    `${JSON.stringify(
+      {
+        name: `solo-${name.replace("@provguard/", "")}`,
+        version: "1.0.0",
+        type: "module",
+        private: true,
+        dependencies: { [name]: `file:${entry.tarball}` },
+        overrides: siblingOverrides,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
+  try {
+    run("npm", ["install", "--no-audit", "--no-fund"], solo);
+  } catch (error) {
+    fail(`${name}: solo install failed: ${String(error.stderr ?? error.message).split("\n")[0]}`);
+    continue;
+  }
+
+  try {
+    const output = run(
+      "node",
+      [
+        "--input-type=module",
+        "-e",
+        `import * as m from ${JSON.stringify(name)};
+        const keys = Object.keys(m);
+        if (keys.length === 0) { console.error("no exports"); process.exit(1); }
+        console.log(keys.length);`,
+      ],
+      solo,
+    );
+    ok(`${name}: solo import -> ${output.trim()} exports`);
+  } catch (error) {
+    const detail = String(error.stderr ?? error.message)
+      .trim()
+      .split("\n")[0];
+    fail(`${name}: solo import failed (undeclared runtime dependency?): ${detail}`);
+  }
+
+  for (const bin of Object.keys(entry.manifest.bin ?? {})) {
+    const binPath = join(solo, "node_modules", ".bin", bin);
+    if (!existsSync(binPath)) {
+      fail(`${name}: bin ${bin} not linked in a solo consumer`);
+      continue;
+    }
+    try {
+      run("node", [binPath], solo);
+      ok(`${name}: solo bin ${bin} executed`);
+    } catch (error) {
+      if (error.status === 2) {
+        ok(`${name}: solo bin ${bin} executed (usage, exit 2)`);
+      } else {
+        fail(`${name}: solo bin ${bin} failed with status ${String(error.status)}`);
+      }
+    }
+  }
+
+  // Declaration resolution, per package, against its own installed tree.
+  writeFileSync(
+    join(solo, "tsconfig.json"),
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          module: "NodeNext",
+          moduleResolution: "NodeNext",
+          target: "ES2022",
+          strict: true,
+          noEmit: true,
+          types: [],
+        },
+        files: ["probe.ts"],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  writeFileSync(
+    join(solo, "probe.ts"),
+    `import * as m from ${JSON.stringify(name)};\nexport const probe = Object.keys(m).length;\n`,
+  );
+
+  try {
+    run(
+      "npm",
+      ["install", "--no-audit", "--no-fund", "--save-dev", `typescript@${typescriptVersion()}`],
+      solo,
+    );
+    run(
+      "node",
+      [join(solo, "node_modules", "typescript", "bin", "tsc"), "-p", "tsconfig.json"],
+      solo,
+    );
+    ok(`${name}: solo tsc resolved declarations`);
+  } catch (error) {
+    const detail = String(error.stdout ?? error.stderr ?? error.message)
+      .trim()
+      .split("\n")[0];
+    fail(`${name}: solo tsc failed: ${detail}`);
+  }
+}
+
+console.log("\nInstalling all tarballs into one shared consumer (integration check)\n");
 // Overrides force every @provguard dependency to resolve to the tarball we
 // just built. Without them npm would go to the registry for the inter-package
 // dependencies and verify nothing about what we are shipping.
@@ -208,7 +341,7 @@ writeFileSync(
 
 try {
   run("npm", ["install", "--no-audit", "--no-fund"], consumer);
-  ok("npm install of all tarballs succeeded");
+  ok("shared-consumer install of all tarballs succeeded");
 } catch (error) {
   fail(`npm install of tarballs failed: ${String(error.stderr ?? error.message).split("\n")[0]}`);
 }

@@ -123,8 +123,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Pack, install and import from a clean consumer
+      - name: Pack, install and import from clean consumers
         run: pnpm pack-check
+
+      # Proves the verifier can fail. A guard never shown failing is not a guard.
+      - name: Negative fixture (undeclared runtime dependency)
+        run: pnpm pack-check:negative
 
   # The Neo4j adapter's tests skip when no database is reachable, so `verify`
   # stays green on a machine without Docker and the offline core requirement

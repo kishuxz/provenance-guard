@@ -74,7 +74,9 @@ $ pnpm pack-check
 pack-install-import: all 9 publishable packages verified
 ```
 
-The verifier packs real tarballs, cross-checks `pnpm pack --json` against `tar -tzf` rather than trusting it, installs into an empty consumer with `overrides` forcing local resolution, imports every entry point, executes every bin, resolves declarations with the consumer's own `tsc`, and fails on any path referenced by `main`, `types`, `exports`, `bin` or a declaration map that is absent. It runs in CI as the `packaging` job.
+**Correction (second remediation pass).** The verifier originally installed all nine tarballs into **one shared consumer**, so a dependency declared by one package could satisfy an undeclared import in another. Deleting `zod` from `@provguard/schema` still reported `9/9 verified`, while a real consumer installing that package alone got `ERR_MODULE_NOT_FOUND`. That is HIGH-1's own class of mistake — verification not matching how a real consumer installs — inside the verifier built to fix HIGH-1. Repaired in P3: every package is now installed, imported, executed and type-checked in **its own empty consumer** before the shared-consumer integration check, and `pnpm pack-check:negative` proves the verifier rejects the undeclared-dependency fixture.
+
+The verifier packs real tarballs, cross-checks `pnpm pack --json` against `tar -tzf` rather than trusting it, installs each package into its own empty consumer and then all of them into a shared one, imports every entry point, executes every bin, resolves declarations with the consumer's own `tsc`, and fails on any path referenced by `main`, `types`, `exports`, `bin` or a declaration map that is absent. It runs in CI as the `packaging` job.
 
 ### HIGH-2 — the disabled baseline was a constant presented as a measurement
 
