@@ -73,3 +73,9 @@ Two deliberate exceptions:
 ## What is not here
 
 No retrieval, no model calls, no prompt construction, no storage of raw material beyond what a caller hands over. See `docs/LIMITATIONS.md` for what the measurements do and do not support.
+
+## Storage and sensitive data
+
+Serialization and the Neo4j adapter share one rule: **raw material is redacted by default and raw persistence is an explicit opt-in.** Redaction touches only non-identity attributes, so ids derive, graphs validate, and traversals behave identically whether or not text was stored.
+
+The asymmetry to keep in mind is that `Source.uri` is _not_ redactable — it is an identity field — so credentials are stripped when the node is created rather than when it is exported or stored. A secret that reaches storage has already leaked; an export filter only protects the copies that pass through it.

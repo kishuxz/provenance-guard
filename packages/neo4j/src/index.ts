@@ -3,6 +3,8 @@ import neo4j, { type Driver, type ManagedTransaction, type Session } from "neo4j
 import {
   GraphError,
   NodeKinds,
+  REDACTABLE_ATTRIBUTES,
+  REDACTED,
   type EdgeType,
   type GraphEdge,
   type GraphInput,
@@ -18,6 +20,21 @@ export interface Neo4jAdapterOptions {
   readonly password: string;
   /** Database name. Defaults to the server's default database. */
   readonly database?: string;
+  /**
+   * Persist raw chunk, claim and output text instead of redacting it.
+   *
+   * Off by default, matching `toCanonicalJSON` and `toJSONL`. A store holding
+   * every chunk of raw material a guard ever saw is a standing disclosure risk,
+   * and a system whose documentation says redaction is the default should not
+   * quietly except its database.
+   *
+   * Turn this on only when you control the database's access, retention and
+   * backups, and need the original text for investigation. Redaction touches
+   * only non-identity attributes, so ids and traversals are unaffected either
+   * way -- what you lose is the ability to read the material back, not the
+   * ability to trace it.
+   */
+  readonly persistRawText?: boolean;
 }
 
 /**
@@ -48,11 +65,18 @@ export class Neo4jGraphAdapter implements GraphStoreAdapter {
 
   readonly #driver: Driver;
   readonly #database: string | undefined;
+  readonly #persistRawText: boolean;
   #schemaReady = false;
 
   constructor(options: Neo4jAdapterOptions) {
     this.#driver = neo4j.driver(options.uri, neo4j.auth.basic(options.username, options.password));
     this.#database = options.database;
+    this.#persistRawText = resolvePersistRawText(options.persistRawText);
+  }
+
+  /** Whether this adapter writes raw material. Reported so a caller can assert it. */
+  get persistsRawText(): boolean {
+    return this.#persistRawText;
   }
 
   /**
@@ -109,7 +133,11 @@ export class Neo4jGraphAdapter implements GraphStoreAdapter {
           `UNWIND $nodes AS node
            MERGE (n:${NODE_LABEL} {tenantId: node.tenantId, id: node.id})
            SET n += node.properties, n.kind = node.kind`,
-          { nodes: graph.nodes.map(toNodeParameter) },
+          {
+            nodes: graph.nodes
+              .map((node) => (this.#persistRawText ? node : redactNodeForStorage(node)))
+              .map(toNodeParameter),
+          },
         );
 
         await transaction.run(
@@ -239,6 +267,57 @@ export class Neo4jGraphAdapter implements GraphStoreAdapter {
  */
 const JSON_ENCODED_FIELDS = ["reasonCodes"] as const;
 
+/**
+ * Resolves the raw-text opt-in.
+ *
+ * Only the literal boolean `true` enables it. Absent means redact. A malformed
+ * value throws rather than defaulting, because the two silent failures are both
+ * bad in different directions: `"false"` is truthy and would silently enable
+ * raw persistence, while quietly ignoring a typo would leave an operator
+ * believing they had switched it on. Neither should be discovered from the
+ * contents of a database.
+ */
+export function resolvePersistRawText(value: unknown): boolean {
+  if (value === undefined || value === null) {
+    return false;
+  }
+
+  if (typeof value !== "boolean") {
+    throw new GraphError(
+      "GRAPH_SCHEMA_INVALID",
+      `persistRawText must be a boolean, received ${typeof value}`,
+    );
+  }
+
+  return value;
+}
+
+/**
+ * Replaces raw material with the shared placeholder before it reaches the wire.
+ *
+ * Redaction happens here rather than at the query, so nothing raw is ever a
+ * query parameter -- parameters end up in database query logs.
+ *
+ * Every redactable attribute is a non-identity field, so a redacted node's id
+ * still derives from its remaining attributes and the stored graph still
+ * validates.
+ */
+export function redactNodeForStorage(node: GraphNode): GraphNode {
+  const attributes = REDACTABLE_ATTRIBUTES[node.kind];
+  if (attributes.length === 0) {
+    return node;
+  }
+
+  const copy = { ...node } as Record<string, unknown>;
+  for (const attribute of attributes) {
+    if (attribute in copy) {
+      copy[attribute] = REDACTED;
+    }
+  }
+
+  return copy as GraphNode;
+}
+
 function toNodeParameter(node: GraphNode): Record<string, unknown> {
   const properties: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(node)) {
@@ -326,9 +405,15 @@ function assertStructurallySound(graph: GraphInput): void {
   );
 
   if (bad.length > 0) {
+    // Counts and ids only. Echoing the offending node would put stored
+    // material into an error string, which is the least controlled surface
+    // there is.
     throw new GraphError(
       "GRAPH_SCHEMA_INVALID",
       `refusing to ingest ${bad.length} structurally invalid node(s)`,
+      bad
+        .slice(0, 5)
+        .map((node) => `node id ${String((node as { id?: unknown }).id ?? "<absent>")}`),
     );
   }
 }

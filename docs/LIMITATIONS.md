@@ -67,6 +67,14 @@ The guards only prevent a bad delivery if they sit **inline, synchronously, betw
 
 Monitor mode prevents nothing. A chain observed in monitor mode was still delivered to the user.
 
+## 8. A redacted graph store cannot answer every question
+
+The Neo4j adapter redacts chunk, claim and output text by default. Ids, edges, verdicts, policy versions and reason codes survive, so `trace`, `explain` and `impact` work unchanged — but the stored graph will not tell you _what the polluted chunk said_.
+
+For post-incident investigation that is often the thing you want. `persistRawText: true` exists for that case and is an explicit decision with real consequences: the database then holds every chunk of raw material the guard ever saw, and its access control, retention and backups become part of your disclosure surface.
+
+There is no middle setting. Field-level or per-tenant redaction policy is not implemented.
+
 ## Summary
 
 | Claim                                    | Support                                                                               |

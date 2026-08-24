@@ -73,6 +73,31 @@ A stored graph comes back canonically identical to what was written, and still v
 - The driver returns integers as its own 64-bit `Integer` type. Every integer in this schema is small (an ordinal, a span offset, an HTTP status), so they are converted back to `number`.
 - Neo4j stores scalars, not nested objects, so array attributes are JSON-encoded. `reasonCodes` is the only one today; it is encoded by name rather than by a generic serializer that would silently flatten a future nested field.
 
+## Sensitive data
+
+**The adapter redacts raw material by default.** Chunk, claim and output text are replaced with `[redacted]` before they reach the wire, matching what `toCanonicalJSON` and `toJSONL` already do. A store holding every chunk of raw material a guard ever saw is a standing disclosure risk, and a system whose documentation says redaction is the default should not quietly except its database.
+
+Redaction happens before the values become query parameters, not at the query, because parameters end up in database query logs.
+
+Only non-identity attributes are redacted, so node ids still derive from their remaining fields and a redacted graph still validates and remains queryable by id. What you lose is the ability to read the material back — not the ability to trace it.
+
+### Opting in to raw text
+
+```ts
+const adapter = new Neo4jGraphAdapter({
+  uri: process.env.PROVGUARD_NEO4J_URI,
+  username: process.env.PROVGUARD_NEO4J_USER,
+  password: process.env.PROVGUARD_NEO4J_PASSWORD,
+  persistRawText: true, // must be the literal boolean
+});
+```
+
+Turn this on only when you control the database's access, retention and backups, and need the original text for investigation.
+
+**Only the literal boolean `true` enables it.** A string, a number, or any other type throws rather than defaulting, because both silent failures are bad in different directions: `"false"` is truthy and would silently enable raw storage, while quietly ignoring a typo would leave you believing you had switched it on. Neither should be discovered from the contents of a database.
+
+Credentials and stored text never appear in adapter errors — failures report counts and node ids only.
+
 ## Limitations
 
 - Performance is not characterised. No figures are published because none have been measured on a declared fixture, and `docs/LIMITATIONS.md` explains why an unmeasured number is worse than none.

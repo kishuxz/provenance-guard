@@ -37,6 +37,8 @@ No attacker is required. That is the defining property, and it is why input sani
 
 Semantic invariant failures deliberately do **not** block a load: a graph recording that a claim rested on a refused chunk is a true record of a real defect, and refusing to store it would make the defect unexaminable.
 
+**Raw material at rest in a graph database.** The Neo4j adapter redacts raw material by default, so the common configuration stores hashes, ids and decisions but no text. Raw persistence is an explicit opt-in that only a literal boolean enables; a malformed value throws rather than defaulting in either direction. When it is enabled, the database becomes part of your disclosure surface and its access control, retention and backups are the operator's responsibility.
+
 **History rewriting.** A node whose stored ID does not re-derive from its own fields is reported as `GRAPH_ID_MISMATCH`. Appending is normal; editing is detectable.
 
 **Secret leakage through the ledger.** Source URI credentials are stripped at node creation, so they are never recorded — an export filter only protects copies that pass through it, not the database or the logs. Chunk, claim, and output text are redacted on export by default. Every redactable attribute is a non-identity field, so a redacted export still validates.

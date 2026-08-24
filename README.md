@@ -212,6 +212,10 @@ Node and edge IDs are deterministic: the same input produces the same graph on a
 | `@provguard/neo4j`      | Optional Neo4j storage adapter. Nothing in the core depends on it          |
 | `@provguard/demo`       | Narrated stdout walkthrough of the D1 chain, guards off then on            |
 
+## Storing lineage
+
+The optional Neo4j adapter **redacts raw text by default**, matching the export contract — the database holds ids, hashes, verdicts and policy versions, but not the material itself. Raw persistence is an explicit opt-in that only a literal boolean enables. See [docs/NEO4J.md](docs/NEO4J.md).
+
 ## Verification
 
 ```bash

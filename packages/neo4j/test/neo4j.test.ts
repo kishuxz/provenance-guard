@@ -34,18 +34,69 @@ if (URI === undefined) {
   );
 }
 
+/**
+ * A skipped test is not evidence.
+ *
+ * These suites skip when no database is reachable so `pnpm test` stays green on
+ * a laptop without Docker, and so the offline `verify` job proves the core needs
+ * no database. That is a convenience with a failure mode: if the job that *is*
+ * supposed to provide Neo4j stopped doing so, every integration assertion would
+ * silently vanish and the run would still report success.
+ *
+ * Keyed on PROVGUARD_REQUIRE_NEO4J rather than CI, because `verify` legitimately
+ * has no database -- that is the offline guarantee -- and only the `neo4j` job
+ * asserts otherwise.
+ */
+describe("integration coverage", () => {
+  it("does not silently skip where a database was promised", () => {
+    if (process.env.PROVGUARD_REQUIRE_NEO4J !== "1") {
+      return;
+    }
+
+    expect(
+      URI,
+      "PROVGUARD_REQUIRE_NEO4J=1 promises a database, but PROVGUARD_NEO4J_URI is unset",
+    ).toBeDefined();
+  });
+});
+
 let adapter: Neo4jGraphAdapter | undefined;
 
+/**
+ * Conformance and fidelity run with raw persistence on.
+ *
+ * The conformance contract includes "preserves every recorded fact through
+ * storage", which redaction deliberately breaks: a redacted store returns
+ * `[redacted]` where the text was. Both behaviours are correct and both are
+ * tested -- fidelity here, and the redacting default in its own block below.
+ */
 function connect(): Neo4jGraphAdapter {
   adapter ??= new Neo4jGraphAdapter({
     uri: URI as string,
     username: USERNAME,
     password: PASSWORD,
+    persistRawText: true,
   });
   return adapter;
 }
 
+let redacting: Neo4jGraphAdapter | undefined;
+
+/** The default configuration: no raw material reaches the database. */
+function connectRedacting(): Neo4jGraphAdapter {
+  redacting ??= new Neo4jGraphAdapter({
+    uri: URI as string,
+    username: USERNAME,
+    password: PASSWORD,
+  });
+  return redacting;
+}
+
 afterAll(async () => {
+  if (redacting !== undefined) {
+    await redacting.clear(TENANT);
+    await redacting.close();
+  }
   if (adapter !== undefined) {
     await adapter.clear(TENANT);
     await adapter.clear("globex");
@@ -199,5 +250,85 @@ suite("Neo4jGraphAdapter tenant isolation", () => {
 
     expect(await subject.nodes("globex")).toEqual([]);
     expect((await subject.nodes(TENANT)).length).toBeGreaterThan(0);
+  });
+});
+
+suite("Neo4jGraphAdapter sensitive data", () => {
+  const SECRET = "Revenue grew 12% quarter over quarter in the EMEA region.";
+
+  beforeEach(async () => {
+    await connectRedacting().clear(TENANT);
+  });
+
+  it("redacts by default, matching the export contract", async () => {
+    const subject = connectRedacting();
+    expect(subject.persistsRawText).toBe(false);
+
+    await subject.ingest(TENANT, baselineGraph());
+    const stored = JSON.stringify(await subject.snapshot(TENANT));
+
+    expect(stored).not.toContain(SECRET);
+    expect(stored).toContain("[redacted]");
+  });
+
+  it("stores no raw text in the database itself, not merely on read", async () => {
+    // Queried back through a separate adapter instance so this cannot be a
+    // read-side filter masking raw rows.
+    const subject = connectRedacting();
+    await subject.ingest(TENANT, baselineGraph());
+
+    const reader = new Neo4jGraphAdapter({
+      uri: URI as string,
+      username: USERNAME,
+      password: PASSWORD,
+      persistRawText: true,
+    });
+    try {
+      const stored = JSON.stringify(await reader.snapshot(TENANT));
+      expect(stored).not.toContain(SECRET);
+    } finally {
+      await reader.close();
+    }
+  });
+
+  it("persists raw text only when explicitly asked", async () => {
+    // The flag is what makes the difference: same graph, same database.
+    const subject = connect();
+    await subject.clear(TENANT);
+    await subject.ingest(TENANT, baselineGraph());
+
+    expect(subject.persistsRawText).toBe(true);
+    expect(JSON.stringify(await subject.snapshot(TENANT))).toContain(SECRET);
+  });
+
+  it("keeps a redacted stored graph valid, so identity survives redaction", async () => {
+    const subject = connectRedacting();
+    await subject.ingest(TENANT, baselineGraph());
+
+    expect(validateGraph(await subject.snapshot(TENANT)).violations).toEqual([]);
+  });
+
+  it("keeps tenant isolation under redaction", async () => {
+    const subject = connectRedacting();
+    await subject.ingest(TENANT, baselineGraph());
+
+    expect(await subject.nodes("globex")).toEqual([]);
+    expect((await subject.nodes(TENANT)).length).toBeGreaterThan(0);
+  });
+
+  it("never puts the password or stored text into an error", async () => {
+    const subject = connectRedacting();
+
+    try {
+      await subject.ingest(TENANT, {
+        nodes: [{ kind: "Wormhole", id: "x" } as unknown as GraphNode],
+        edges: [],
+      });
+      throw new Error("expected a rejection");
+    } catch (error) {
+      const rendered = `${String((error as Error).message)} ${JSON.stringify((error as GraphError).details ?? [])}`;
+      expect(rendered).not.toContain(PASSWORD);
+      expect(rendered).not.toContain(SECRET);
+    }
   });
 });
