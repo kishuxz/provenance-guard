@@ -42,3 +42,24 @@ False positives: 0/2 basic, 0/4 hard, **1/2 mixed**.
 ### Known gaps
 
 Seven failing block-scenarios, one confirmed false positive, unmeasured guard latency, uncharacterised Neo4j ingestion performance, no security disclosure process, and no schema migration tooling. All are documented in `docs/LIMITATIONS.md`, `docs/THREAT_MODEL.md`, and `docs/REVIEW.md` rather than being left for a reader to discover.
+
+### Remediation of the second-pass audit (unreleased)
+
+Fixes for every finding in `docs/SECOND_PASS_AUDIT.md`. Evidence in
+`docs/REMEDIATION_REPORT.md`. Version remains **0.1.0, unreleased**.
+
+- **Packaging** (#61) — explicit `files` allowlist on all nine publishable
+  packages, full publish metadata, per-package README and LICENSE, and a
+  clean-room pack-install-import verifier in CI. Previously `npm pack` omitted
+  `dist/` entirely and did not rewrite `workspace:*` ranges; `pnpm pack` did
+  both correctly, so correctness depended on the publishing tool.
+- **Benchmark** (#63) — the hardcoded disabled baseline is replaced by a
+  measured differential: every scenario runs guarded and against an executed
+  control, and `guard_effect` reports whether the guards changed the outcome.
+  Guarded rates are unchanged.
+- **Graph imports** (#65) — graph documents are validated for schema, identity,
+  tenant and run scope before any state is mutated; rejected loads are atomic.
+- **Neo4j** (#69) — stored material is redacted by default; raw persistence is
+  an explicit opt-in that only a literal boolean enables.
+- **CLI** (#68) — filesystem and parse failures produce stable codes, actionable
+  messages and documented exit codes, with no stack trace by default.
