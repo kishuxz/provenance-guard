@@ -1,5 +1,14 @@
 #!/usr/bin/env node
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
+
+import {
+  CliError,
+  EXIT_USAGE,
+  asCliError,
+  formatCliError,
+  parseJsonInput,
+  readInputFile,
+} from "./errors.js";
 import { basename } from "node:path";
 import process from "node:process";
 
@@ -195,10 +204,26 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     }
 
     printUsage();
-    return 2;
+    return EXIT_USAGE;
   } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    return 2;
+    const failure = asCliError(
+      error,
+      "INPUT_INVALID_CHECK",
+      "Check the command arguments and input file.",
+    );
+
+    // --json gets a stable object so a pipeline can branch on `code` without
+    // parsing English. Everything else gets two readable lines and no stack.
+    // Re-read only the two output flags, from a parse that cannot throw: the
+    // failure may itself be a malformed-argument error, and the handler must
+    // not fail while reporting a failure.
+    if (argv.includes("--json")) {
+      console.error(JSON.stringify(failure.toJSON(), null, 2));
+    } else {
+      console.error(formatCliError(failure, argv.includes("--debug")));
+    }
+
+    return EXIT_USAGE;
   }
 }
 
@@ -206,7 +231,8 @@ export async function runCheckFile(
   filePath: string,
   options: { monitor?: boolean } = {},
 ): Promise<PipelineResult> {
-  const payload = JSON.parse(await readFile(filePath, "utf8")) as unknown;
+  const text = await readInputFile(filePath, "check input");
+  const payload = parseJsonInput(text, filePath, "check input");
   const input = parseCheckInput(payload);
   const runtime = await loadRuntime();
   return runPipeline(runtime, input.chunks, input.output, {
@@ -808,8 +834,8 @@ async function runTraversalCommand(
   }
 
   const graphRuntime = await loadGraphRuntime();
-  const graph = graphRuntime.fromCanonicalJSON(await readFile(graphPath, "utf8"));
-  const store = new graphRuntime.MemoryGraphStore(graph);
+  const graph = readGraphDocument(graphRuntime, await readInputFile(graphPath, "graph"), graphPath);
+  const store = loadGraphStore(graphRuntime, graph, graphPath);
 
   if (command === "trace") {
     const result = graphRuntime.trace(store, flags.tenant, nodeId);
@@ -829,6 +855,59 @@ async function runTraversalCommand(
 }
 
 /**
+ * Parses a graph document, distinguishing "not JSON" from "not a graph".
+ *
+ * A caller who hands over a truncated file and a caller who hands over a
+ * well-formed document of the wrong shape have different problems, and one
+ * message for both leaves each of them guessing.
+ */
+function readGraphDocument(
+  graphRuntime: GraphRuntime,
+  text: string,
+  path: string,
+): ReturnType<GraphRuntime["fromCanonicalJSON"]> {
+  try {
+    return graphRuntime.fromCanonicalJSON(text);
+  } catch (error) {
+    const looksLikeJson = (() => {
+      try {
+        JSON.parse(text);
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+
+    throw new CliError(
+      looksLikeJson ? "INPUT_INVALID_GRAPH" : "INPUT_MALFORMED_JSON",
+      looksLikeJson
+        ? `graph file is not a valid graph document: ${path}`
+        : `graph file is not valid JSON: ${path}`,
+      error instanceof Error ? error.message : "Check the file contents.",
+      error,
+    );
+  }
+}
+
+/** Loads a validated store, reporting a refused document as an input error. */
+function loadGraphStore(
+  graphRuntime: GraphRuntime,
+  graph: ReturnType<GraphRuntime["fromCanonicalJSON"]>,
+  path: string,
+): InstanceType<GraphRuntime["MemoryGraphStore"]> {
+  try {
+    return new graphRuntime.MemoryGraphStore(graph);
+  } catch (error) {
+    throw new CliError(
+      "INPUT_INVALID_GRAPH",
+      `graph file was refused: ${path}`,
+      error instanceof Error ? error.message : "Run `provguard graph validate` for details.",
+      error,
+    );
+  }
+}
+
+/**
  * `graph validate` exits 1 when the graph has violations, so it can gate CI in
  * the same way `check` does.
  */
@@ -843,7 +922,7 @@ async function runGraphCommand(args: string[], flags: CliFlags): Promise<number>
   }
 
   const graphRuntime = await loadGraphRuntime();
-  const graph = graphRuntime.fromCanonicalJSON(await readFile(graphPath, "utf8"));
+  const graph = readGraphDocument(graphRuntime, await readInputFile(graphPath, "graph"), graphPath);
   const report = graphRuntime.validateGraph(graph);
 
   console.log(flags.json ? JSON.stringify(report, null, 2) : formatValidation(report));
@@ -875,6 +954,8 @@ interface CliFlags {
   tenant: string;
   graphPath: string | null;
   unredacted: boolean;
+  /** Surfaces the underlying cause and its stack. Off by default. */
+  debug: boolean;
   /**
    * Pins the ledger observation time. IDs never depend on it, so this only
    * affects the recorded `observedAt` — but pinning it makes `--json` output
@@ -896,6 +977,7 @@ function parseArgs(argv: string[]): {
     tenant: DEFAULT_TENANT,
     graphPath: null,
     unredacted: false,
+    debug: false,
     observedAt: null,
   };
   const positional: string[] = [];
@@ -909,6 +991,8 @@ function parseArgs(argv: string[]): {
       flags.json = true;
     } else if (arg === "--unredacted") {
       flags.unredacted = true;
+    } else if (arg === "--debug") {
+      flags.debug = true;
     } else if (arg === "--tenant" || arg === "--graph" || arg === "--observed-at") {
       const value = argv[index + 1];
       if (value === undefined || value.startsWith("--")) {
