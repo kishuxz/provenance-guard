@@ -75,6 +75,26 @@ For post-incident investigation that is often the thing you want. `persistRawTex
 
 There is no middle setting. Field-level or per-tenant redaction policy is not implemented.
 
+## 9. Four measured outbound bypasses
+
+Found by adversarial testing after the corpus was written, added to it, and **still failing**. Each is a documented limitation for v0.1, not a pending fix.
+
+- **Unicode homoglyphs bypass semantic matching.** Replacing a Latin `o` with a Cyrillic U+043E produces a string that renders identically and compares differently. Normalization folds case, whitespace and punctuation; it does not fold confusables. `mixed-unicode-homoglyph`.
+- **Negation flips are missed.** Inserting "not" inverts what a sentence asserts while leaving every entity and number in place. Overlap-based grounding has no notion of polarity, so the inverted claim grounds exactly as well as the true one. `mixed-negation-flip`.
+- **Contradictory admitted evidence is not detected.** Two legitimate retrievals stating different figures both stay admitted, and a claim grounds against whichever one supports it. `CONTRADICTED_BY` exists in the graph model and **nothing populates it**. `mixed-contradictory-evidence`.
+- **Fenced code bypasses the outbound gate entirely.** Excluding fenced code from claim extraction is defensible for real code. The consequence, not previously stated, is that wrapping any fabrication in backticks defeats the gate, and nothing in the text has to look like code. `mixed-fenced-code-fabrication`.
+
+Fixing these by matching the fixtures' wording would raise the score and improve nothing, so it has not been done. A general fix would have to address the class, carry adversarial tests, and not materially increase false positives.
+
+## 10. Two measurement defects found in this project's own verification
+
+Recorded because they bear on how much the other numbers here are worth.
+
+- **An invocation count did not prove the control ran.** The benchmark's disabled control could be replaced by a constant that incremented a counter and returned a fixed value, and all fifteen benchmark tests passed. Repaired: the control now returns evidence derived from the scenario and the benchmark verifies it field by field on every execution.
+- **The pack verifier's shared consumer masked an undeclared runtime dependency.** Installing all nine tarballs together let a dependency declared by one package satisfy an undeclared import in another; removing `zod` from `@provguard/schema` still reported nine of nine verified while a real single-package consumer failed with `ERR_MODULE_NOT_FOUND`. Repaired: every package is verified in its own empty consumer, with a negative fixture proving the verifier can fail.
+
+Both were found by the implementer attacking their own work, which is better than not finding them and worse than independent review.
+
 ## Summary
 
 | Claim                                    | Support                                                                               |

@@ -80,6 +80,10 @@ mixed-diagnostic-interleaved        mixed       constructed  should_block  block
 mixed-cross-sentence-both-grounded  mixed       constructed  should_block  allow   fail  outbound       none         -                          none      none          miss
 mixed-clean-quoted-error            mixed       constructed  should_allow  block   fail  either         outbound     CLAIM_UNGROUNDED           outbound  changed       miss
 mixed-clean-multi-record            mixed       constructed  should_allow  allow   pass  either         none         -                          none      none          miss
+mixed-unicode-homoglyph             mixed       constructed  should_block  allow   fail  outbound       none         -                          none      none          miss
+mixed-negation-flip                 mixed       constructed  should_block  allow   fail  outbound       none         -                          none      none          miss
+mixed-contradictory-evidence        mixed       constructed  should_block  allow   fail  outbound       none         -                          none      none          miss
+mixed-fenced-code-fabrication       mixed       constructed  should_block  allow   fail  outbound       none         -                          none      none          miss
 
 recall on block scenarios:
   basic derived: 6/6 (100.0%)
@@ -87,19 +91,19 @@ recall on block scenarios:
   hard derived: n/a (0 scenarios)
   hard constructed: 3/8 (37.5%)
   mixed derived: n/a (0 scenarios)
-  mixed constructed: 2/4 (50.0%)
+  mixed constructed: 2/8 (25.0%)
 false-positive rate on controls:
   basic: 0/2 (0.0%)
   hard: 0/4 (0.0%)
   mixed: 1/2 (50.0%)
 outbound gate validations: 1
-expected gate breakdown: inbound=11, outbound=6, either=11
-actual gate breakdown: inbound=12, outbound=2, none=14
-expected->actual gate breakdown: inbound->inbound=10, either->none=8, outbound->none=5, outbound->outbound=1, inbound->none=1, either->inbound=2, either->outbound=1
+expected gate breakdown: inbound=11, outbound=10, either=11
+actual gate breakdown: inbound=12, outbound=2, none=18
+expected->actual gate breakdown: inbound->inbound=10, either->none=8, outbound->none=9, outbound->outbound=1, inbound->none=1, either->inbound=2, either->outbound=1
 stage breakdown: inbound=12, outbound=2
 reason breakdown: UPSTREAM_STATUS_NOT_OK=2, CHANNEL_NOT_PERMITTED=3, PAYLOAD_TRUNCATED=2, TIER_BELOW_MINIMUM=1, PAYLOAD_EMPTY=1, CLAIM_UNVERIFIABLE=1, PROVENANCE_LABEL_MISMATCH=2, RESULT_DEGRADED=1, CLAIM_UNGROUNDED=1
-guard changed the outcome on: 13/20 (65.0%) of block scenarios
-disabled-control invocations: 28
+guard changed the outcome on: 13/24 (54.2%) of block scenarios
+disabled-control invocations: 32
 shape-check baseline catches: 0
 not measured, true by construction: an unguarded pipeline withholds nothing
 
