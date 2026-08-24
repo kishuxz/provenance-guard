@@ -34,6 +34,29 @@ if (URI === undefined) {
   );
 }
 
+/**
+ * A skipped test is not evidence.
+ *
+ * These suites skip when no database is reachable so `pnpm test` stays green on
+ * a laptop without Docker. That is a convenience with a failure mode: if CI ever
+ * stopped providing the service container, every integration assertion would
+ * silently vanish and the suite would still report success. This runs
+ * unconditionally and fails loudly in that case.
+ */
+describe("integration coverage", () => {
+  it("does not silently skip in CI", () => {
+    const inCi = process.env.CI === "true" || process.env.CI === "1";
+    if (!inCi) {
+      return;
+    }
+
+    expect(
+      URI,
+      "PROVGUARD_NEO4J_URI must be set in CI so the Neo4j integration tests actually execute",
+    ).toBeDefined();
+  });
+});
+
 let adapter: Neo4jGraphAdapter | undefined;
 
 /**
