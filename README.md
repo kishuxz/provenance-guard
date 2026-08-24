@@ -226,6 +226,16 @@ pnpm exec provguard bench --json
 
 `pnpm exec provguard bench --json` exits `0`. It reports the hard-tier failures in its table rather than failing the process, because the bench measures the guards; it is not itself a pass/fail gate on the build. The regression gate is `pnpm test`, which pins the corpus and the reported rates.
 
+## Exit codes
+
+| Code | Meaning                                                                                                         |
+| ---- | --------------------------------------------------------------------------------------------------------------- |
+| `0`  | Success. For `check`, nothing was blocked.                                                                      |
+| `1`  | A **result**, not a failure: `check` blocked, or `graph validate` found violations. Gate your pipeline on this. |
+| `2`  | The command could not run — bad arguments, or an unreadable, malformed or invalid input file.                   |
+
+Failures print a message and an actionable hint, never a stack trace. Add `--debug` for the underlying cause, or `--json` for a stable object with a machine-readable `code`.
+
 ## Documentation
 
 | Document                                                         | What it is                                                                  |

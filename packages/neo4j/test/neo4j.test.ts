@@ -28,7 +28,6 @@ const TENANT = "acme";
 const suite = URI === undefined ? describe.skip : describe;
 
 if (URI === undefined) {
-  // eslint-disable-next-line no-console
   console.warn(
     "[@provguard/neo4j] PROVGUARD_NEO4J_URI is not set; integration tests skipped. " +
       "Run `docker compose -f packages/neo4j/docker-compose.yml up -d` to enable them.",
