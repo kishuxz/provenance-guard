@@ -170,6 +170,9 @@ jobs:
 
       - name: Neo4j integration tests
         env:
+          # Promises a database, so the suite fails instead of skipping if the
+          # service container ever goes away.
+          PROVGUARD_REQUIRE_NEO4J: "1"
           PROVGUARD_NEO4J_URI: bolt://localhost:7687
           PROVGUARD_NEO4J_USER: neo4j
           PROVGUARD_NEO4J_PASSWORD: provguardtest
