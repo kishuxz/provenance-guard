@@ -18,7 +18,8 @@
     "test": "vitest run",
     "format": "prettier --check .",
     "perf": "node scripts/perf.mjs",
-    "pack-check": "node scripts/pack-install-import.mjs"
+    "pack-check": "node scripts/pack-install-import.mjs",
+    "pack-check:negative": "node scripts/verify-negative-fixture.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
