@@ -270,3 +270,107 @@ No tag, no GitHub Release, no npm publish, no `docs/INDEPENDENT_REVIEW.md`, no G
 ## Next step
 
 Independent review of `a3b4536` by a party that did not write it. Not tagging.
+
+---
+
+# Second remediation addendum — 2026-08-24
+
+Covers the findings in `docs/ADVERSARIAL_TEST_LOG.md`, which came from the implementer attacking their own work at `4edb675`. **Still implementer-generated evidence. Still not an independent review, and no verdict is offered.**
+
+## Final commit
+
+`a8772d9`
+
+## What changed
+
+| Node | PR  | Finding                                             | Outcome                                                         |
+| ---- | --- | --------------------------------------------------- | --------------------------------------------------------------- |
+| A3   | #71 | —                                                   | Adversarial evidence preserved, including the invalid first run |
+| B3   | #73 | **HIGH** — control execution unverified             | Evidence derived from input, verified per execution             |
+| P3   | #75 | **MEDIUM** — shared consumer masked undeclared deps | Solo consumer per package + negative fixture                    |
+| E2   | #77 | **MEDIUM/LOW** — four undocumented bypasses         | Added as failing scenarios, documented, not fixed               |
+
+## Mutation evidence, before and after
+
+**B3 — the `PG_FAKE` control mutation:**
+
+|                                | Before               | After                |
+| ------------------------------ | -------------------- | -------------------- |
+| `bench.test.ts` + anti-vacuity | 15/15 **passed**     | 21 failed / 9 passed |
+| `provguard bench`              | emitted a full table | refuses, **exit 2**  |
+
+The verification now runs inside the benchmark, not only in the test suite, so the command itself will not report a number it could not verify. The backdoor is not in the source: `grep -c PG_FAKE packages/cli/src/*.ts` returns 0 for every file.
+
+**P3 — the undeclared-dependency fixture:**
+
+|                                        | Old verifier                 | New verifier |
+| -------------------------------------- | ---------------------------- | ------------ |
+| `zod` removed from `@provguard/schema` | **accepted**, `9/9 verified` | **rejected** |
+
+```
+FAIL  @provguard/harness: solo tsc failed: node_modules/@provguard/schema/dist/index.d.ts(1,19):
+      error TS2307: Cannot find module 'zod' or its corresponding type declarations.
+```
+
+## Corrections to this report
+
+Two claims in the first-pass sections above were wrong and are corrected in place:
+
+1. "An invocation-count assertion, so a loop that executes nothing cannot report a clean result." **False.** A counter proves a function was called, not that it processed input.
+2. The pack verifier's shared consumer let one package's dependency satisfy another's undeclared import.
+
+Both are stated at the point where they originally appeared, rather than only here.
+
+## Benchmark truth after E2
+
+Four adversarial failure modes were added to the corpus and **none was fixed**. The numbers got worse because more of what does not work is now measured.
+
+| Metric                   | Before E2     | After E2          |
+| ------------------------ | ------------- | ----------------- |
+| Scenarios                | 28            | **32**            |
+| Mixed constructed recall | 2/4 (50.0%)   | **2/8 (25.0%)**   |
+| Guard changed outcome    | 13/20 (65.0%) | **13/24 (54.2%)** |
+| Basic derived            | 6/6           | 6/6 (unchanged)   |
+| Basic constructed        | 2/2           | 2/2 (unchanged)   |
+| Hard constructed         | 3/8           | 3/8 (unchanged)   |
+| Mixed false positives    | 1/2           | 1/2 (unchanged)   |
+
+## Newly documented limitations
+
+`docs/LIMITATIONS.md` §9 and §10, with tracked issues #78–#81:
+
+- Unicode homoglyphs bypass semantic matching (#78).
+- Negation flips are missed (#79).
+- Contradictory admitted evidence is not detected; `CONTRADICTED_BY` exists and nothing populates it (#80).
+- Fenced code bypasses the outbound gate entirely (#81).
+- An invocation count did not prove the control ran.
+- The pack verifier's shared consumer masked an undeclared runtime dependency.
+
+## Clean-clone verification at `a8772d9`
+
+Fresh clone, no cached state. Darwin 25.5.0 arm64, Node v20.20.2, pnpm 10.14.0.
+
+| Gate                                | Result                                     |
+| ----------------------------------- | ------------------------------------------ |
+| `pnpm install --frozen-lockfile`    | PASS                                       |
+| `pnpm build`                        | PASS                                       |
+| `pnpm typecheck`                    | PASS                                       |
+| `pnpm lint`                         | PASS                                       |
+| `pnpm format`                       | PASS                                       |
+| `pnpm test`                         | **478 passed, 28 skipped**, 29 files       |
+| `pnpm pack-check`                   | 9/9, each in its own consumer, plus shared |
+| `pnpm pack-check:negative`          | rejects the fixture                        |
+| `pnpm exec provguard bench --json`  | exit 0                                     |
+| README drift                        | byte-identical to executed output          |
+| `pnpm audit --audit-level moderate` | no known vulnerabilities                   |
+| Neo4j integration                   | CI `neo4j` job, real service container     |
+
+## Operational safety
+
+No EvidenceOps resource was inspected, recreated or deleted in this pass. The `evidenceops-neo4j` container removed during the first pass remains **NOT RESTORED**; nothing here claims otherwise. No broad Docker filters, no `docker rm`, no volume or prune commands. `stash@{0}` and `feat/pollution-harness` untouched. No tag, no release, no publish.
+
+## Remaining limitations
+
+Everything in the first-pass list still stands, plus the four detection classes above. The corpus is still author-written, guard request-path latency is still unmeasured, and `matter` scope still does not exist.
+
+**The independent-review criterion remains open.** Two of the four findings repaired in this pass were defects in this author's own remediation that this author's own tests passed, which is the argument for an independent reviewer rather than against one.
