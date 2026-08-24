@@ -10,7 +10,7 @@ describe("provguard bench", () => {
   it("matches basic harness scenario expectations", async () => {
     const result = await runBench();
 
-    expect(result.scenarios).toHaveLength(28);
+    expect(result.scenarios).toHaveLength(32);
     for (const scenario of result.scenarios.filter((item) => item.difficulty === "basic")) {
       expect(scenario.passed, scenario.id).toBe(true);
       expect(scenario.actual).toBe(scenario.expected === "should_block" ? "block" : "allow");
@@ -202,7 +202,7 @@ describe("provguard bench", () => {
     expect(result.summary.recall.basic.derived.label).toBe("6/6 (100.0%)");
     expect(result.summary.recall.basic.constructed.label).toBe("2/2 (100.0%)");
     expect(result.summary.recall.hard.constructed.label).toBe("3/8 (37.5%)");
-    expect(result.summary.recall.mixed.constructed.label).toBe("2/4 (50.0%)");
+    expect(result.summary.recall.mixed.constructed.label).toBe("2/8 (25.0%)");
   });
 
   it("executes the disabled control once per scenario", async () => {
@@ -211,7 +211,7 @@ describe("provguard bench", () => {
     const result = await runBench();
 
     expect(result.summary.controlInvocations).toBe(result.scenarios.length);
-    expect(result.summary.controlInvocations).toBe(28);
+    expect(result.summary.controlInvocations).toBe(32);
   });
 
   it("derives guard effect from execution, not from the declared expectation", async () => {
@@ -240,7 +240,7 @@ describe("provguard bench", () => {
     const result = await runBench();
 
     // 13 of 20 block scenarios had their outcome changed by the guards.
-    expect(result.summary.guardChangedOutcome.label).toBe("13/20 (65.0%)");
+    expect(result.summary.guardChangedOutcome.label).toBe("13/24 (54.2%)");
     // And the summary carries no hardcoded baseline field any more.
     expect(result.summary).not.toHaveProperty("disabledBaselineCatches");
   });
@@ -261,6 +261,28 @@ describe("provguard bench", () => {
 
     expect(table).toContain("not measured, true by construction");
     expect(table).not.toContain("disabled baseline catches");
+  });
+
+  it("measures the four adversarial failure modes without hiding them", async () => {
+    // These are expected to fail and do. The assertion is that they are
+    // present and measured, not that they pass -- asserting a known failure
+    // as a passing expectation is how a corpus stops being a measurement.
+    const result = await runBench();
+
+    for (const id of [
+      "mixed-unicode-homoglyph",
+      "mixed-negation-flip",
+      "mixed-contradictory-evidence",
+      "mixed-fenced-code-fabrication",
+    ]) {
+      const scenario = result.scenarios.find((candidate) => candidate.id === id);
+      expect(scenario, id).toBeDefined();
+      expect(scenario?.expected, id).toBe("should_block");
+      // Recorded as failing. If one of these ever starts passing, this test
+      // fails and the change must be justified as a real detection improvement
+      // rather than a fixture-shaped rule.
+      expect(scenario?.passed, id).toBe(false);
+    }
   });
 
   it("keeps monitor mode from blocking delivery while preserving would-block results", async () => {

@@ -221,14 +221,20 @@ describe("the real control satisfies its own contract", () => {
     expect(() => verifyControlEvidence(MULTI, honestEvidence())).not.toThrow();
   });
 
-  it("records that the shipped corpus is entirely single-chunk", async () => {
-    // Not an assertion about what the corpus should be — a guard so that the
-    // ordering cases above are known to rely on MULTI rather than silently
-    // becoming corpus-covered without anyone noticing.
-    const { listScenarios } = (await import("@provguard/harness")) as {
-      listScenarios: () => { chunks: unknown[] }[];
-    };
+  it("produces correctly ordered evidence for a real multi-chunk scenario", async () => {
+    // When these tests were written every corpus scenario had exactly one
+    // chunk, so ordering could only be checked against the synthetic MULTI. The
+    // corpus now contains a genuine multi-chunk scenario, so the real control
+    // is exercised against real data as well.
+    const result = await runBench();
+    const multi = result.scenarios.find(
+      (scenario) => scenario.id === "mixed-contradictory-evidence",
+    );
 
-    expect(listScenarios().every((scenario) => scenario.chunks.length === 1)).toBe(true);
+    expect(multi, "expected the multi-chunk scenario to be in the corpus").toBeDefined();
+    // runBench verifies control evidence on every execution, so reaching here
+    // at all means the real control produced ids and hashes matching this
+    // scenario's two chunks in order.
+    expect(multi?.controlAdmittedChunks).toBe(2);
   });
 });
